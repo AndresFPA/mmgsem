@@ -74,14 +74,18 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
   # # Center the data per group (so that the mean for all variables in each group is 0)
   centered <- dat
-  group.idx <- match(dat[, group], g_name)
-  group.sizes <- tabulate(group.idx)
-  group.means <- rowsum.default(as.matrix(dat[, vars]),
-    group = group.idx, reorder = FALSE,
-    na.rm = FALSE
-  ) / group.sizes
-  centered[, vars] <- dat[, vars] - group.means[group.idx, drop = FALSE]
-
+  
+  # if the intercepts are not in the required constraints, then remove the mean structure of the data (i.e., center the data)
+  if(!c("intercepts" %in% constraints)){ 
+    group.idx <- match(dat[, group], g_name)
+    group.sizes <- tabulate(group.idx)
+    group.means <- rowsum.default(as.matrix(dat[, vars]),
+                                  group = group.idx, reorder = FALSE,
+                                  na.rm = FALSE
+    ) / group.sizes
+    centered[, vars] <- dat[, vars] - group.means[group.idx, drop = FALSE]
+  } 
+  
   # Get sample covariance matrix per group (used later)
   S_unbiased <- lapply(X = unique(centered[, group]), FUN = function(x) {
     cov(centered[centered[, group] == x, vars])
@@ -294,8 +298,8 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   endog <- c(endog1, endog2)
   exog <- lavNames(fake, "ov.x")
 
-  # Do a fake model per endo LV (to avoid bias due to reconstruction of group-specific endo variances)
-  # Please note that "lv" is used to identify each model per endo LV
+  # Do a fake model per endo LV (to avoid bias due to reconstruction of group-specific endo variances). For more info, please see the Appendix of the paper related to this code.
+  # Please note that the index "lv" is used to identify each model per endo LV
   # Please also note that this is used AFTER the first iteration. In the first iteration we start with only one model
   fake_lv <- vector(mode = "list", length = length(endog))
 
