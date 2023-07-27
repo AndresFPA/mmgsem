@@ -10,7 +10,7 @@
 #'                   factor 1, and a second string for the MM of factor 2)  
 #' @param step2model Structural model. Used in step 2. Must be a string (like in lavaan).
 #' @param group Name of the group variable. Must be a string.
-#' @param nclus Pre-specified number of clusters.
+#' @param nclus Pre-specified number of clusters. Only used if modelSel == F.
 #' @param seed Pre-defined seed for the random start in case a replication is needed in the future.
 #' @param userStart Pre-defined start provided by the user. Must be a matrix of dimensions ngroups*nclus.
 #'                  A 1 represents that the row group is in the column cluster. There must be only one 1
@@ -38,6 +38,9 @@
 #' @param allG TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
 #'             By default, is TRUE.
 #' @param fit String argument. Either "factors" or "observed". Determines which loglikelihood will be used to fit the model.
+#' @param modelSel TRUE or FALSE argument to determine whether a full model selection (i.e., how many clusters should we use?) procedure is performed.
+#'                 BIC and Chull results are reported.
+#' @param clusters Vector of length two, indicating the minimal and maximal number of clusters. Only used if modelSel is TRUE.
 #'
 #' OUTPUT: The function will return a list with the following results:
 #' @return z_gks: Posterior classification probabilities or cluster memberships (ngroups*nclus matrix).
@@ -58,7 +61,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
                    group, nclus, seed = NULL, userStart = NULL, s1out = NULL,
                    max_it = 10000L, nstarts = 1L, printing = FALSE,
                    partition = "hard", NonInv = NULL, constraints = "loadings",
-                   Endo2Cov = TRUE, allG = TRUE, fit = "factors") {
+                   Endo2Cov = TRUE, allG = TRUE, fit = "factors", modelSel = F, clusters) {
   
   # Add a warning in case there is a pre-defined start and the user also requires a multi-start
   if (!(is.null(userStart)) && nstarts > 1) {
@@ -345,7 +348,26 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   S_unbiased <- lapply(1:ngroups, function(x) {
     reorder_obs(S_unbiased[[x]], matrix = "theta")
   })
+  
+  # Do we require model selection?
+  # If no, then simply use the nclus argument to determine the number of clusters.
+  
+  if (!(is.null(clusters))) {
+    if(length(clusters) == 1){
+      warning("clusters argument must be a vector of length two. It determines the minimum and maximum number of clusters evaluated in model selection")
+    }
+    
+    if(!(is.null(nclus))){
+      stop("The nclus argument is only used when no model selection is intended. It is not possible to use the arguments clusters and nclus simultaneously") 
+    }
+  }
+  
+  if(isFALSE(modelSel)){
+    clusters[1] <- nclus 
+    clusters[2] <- nclus 
+  }
 
+  
   # Multi-start
   for (s in 1:nstarts) {
     if (printing == T) {
