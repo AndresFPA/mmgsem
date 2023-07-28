@@ -896,7 +896,8 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     final_fit = s2out,
     psi_gks = psi_gks,
     lambda = lambda_gs, # Lambda is invariant across all groups
-    theta_gs = theta_gs,
+    MM = S1output, # Output of step 1 (measurement model)
+    cov_eta = cov_eta, # Factor covariance matrix from first step
     beta_ks = beta_ks,
     loglikelihood = LL,
     loglik_gkw = loglik_gksw,
