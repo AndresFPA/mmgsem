@@ -864,13 +864,20 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
   # Calculate BIC
   # Observed
-  Obs.BIC_N <- -2 * Obs.LL + nr_pars * log(sum(N_gs))
-  Obs.BIC_G <- -2 * Obs.LL + nr_pars * log(ngroups)
+  Obs.BIC_N <- (-2 * Obs.LL) + (nr_pars * log(sum(N_gs)))
+  Obs.BIC_G <- (-2 * Obs.LL) + (nr_pars * log(ngroups))
 
   # Factors
-  BIC_N <- -2 * LL + nr_par_factors * log(sum(N_gs))
-  BIC_G <- -2 * LL + nr_par_factors * log(ngroups)
-
+  BIC_N <- (-2 * LL) + (nr_par_factors * log(sum(N_gs)))
+  BIC_G <- (-2 * LL) + (nr_par_factors * log(ngroups))
+  
+  # Calculate AIC. 
+  # Observed
+  Obs.AIC <- (-2 * LL) + (nr_pars * 2)
+  
+  # Factors
+  AIC <- (-2 * LL) + (nr_par_factors * 2)
+  
   # Re order matrices so that we get them in the following order:
   # (1) Exogenous latent variables
   # (2) Endogenous latent variables: independent and dependent variables at the same time
@@ -906,6 +913,10 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     BIC = list(
       observed = list(BIC_N = Obs.BIC_N, BIC_G = Obs.BIC_G),
       Factors = list(BIC_N = BIC_N, BIC_G = BIC_G)
+    ),
+    AIC = list(
+      observed = Obs.AIC,
+      Factors = AIC
     ),
     NrPar = list(Obs.nrpar = nr_pars, Fac.nrpar = nr_par_factors)
   ))

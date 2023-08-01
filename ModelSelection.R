@@ -68,6 +68,8 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
   BIC_N     <- vector(mode = "list", length = nmodels)
   BIC_G_fac <- vector(mode = "list", length = nmodels)
   BIC_N_fac <- vector(mode = "list", length = nmodels)
+  AIC       <- vector(mode = "list", length = nmodels)
+  AIC_fac   <- vector(mode = "list", length = nmodels)
   LL        <- vector(mode = "list", length = nmodels)
   LL_fac    <- vector(mode = "list", length = nmodels)
   nrpar     <- vector(mode = "list", length = nmodels)
@@ -106,6 +108,8 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
     BIC_N[[k]]     <- model_fit[[k]]$BIC$observed$BIC_N
     BIC_G_fac[[k]] <- model_fit[[k]]$BIC$Factors$BIC_G
     BIC_N_fac[[k]] <- model_fit[[k]]$BIC$Factors$BIC_N
+    AIC[[k]]       <- model_fit[[k]]$AIC$observed
+    AIC_fac[[k]]   <- model_fit[[k]]$AIC$Factors
     LL[[k]]        <- model_fit[[k]]$obs_loglik
     LL_fac[[k]]    <- model_fit[[k]]$loglikelihood
     nrpar[[k]]     <- model_fit[[k]]$NrPar$Fac.nrpar
@@ -119,15 +123,18 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
   # browser()
   overview <- cbind(Chull_res, 
                     unlist(BIC_G), unlist(BIC_N),
+                    unlist(AIC),
                     Chull_res_fac[, c(2:4)],
-                    unlist(BIC_G_fac), unlist(BIC_N_fac)
+                    unlist(BIC_G_fac), unlist(BIC_N_fac),
+                    unlist(AIC_fac)
                     )
   
   colnames(overview) <- c("Clusters", 
-                          "LL", "nrpar", "Chull Scree", "BIC_G", "BIC_N",
-                          "LL_fac", "nrpar_fac", "Chull Scree_fac", "BIC_G_fac", "BIC_N_fac")
+                          "LL", "nrpar", "Chull Scree", "BIC_G", "BIC_N", "AIC",
+                          "LL_fac", "nrpar_fac", "Chull Scree_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac")
   
-  return(overview)
+  return(list(Overview = overview, 
+              Models   = model_fit))
 }
 
 
