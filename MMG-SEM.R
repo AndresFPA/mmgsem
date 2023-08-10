@@ -58,7 +58,8 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
                    group, nclus, seed = NULL, userStart = NULL, s1out = NULL,
                    max_it = 10000L, nstarts = 1L, printing = FALSE,
                    partition = "hard", NonInv = NULL, constraints = "loadings",
-                   Endo2Cov = TRUE, allG = TRUE, fit = "factors") {
+                   Endo2Cov = TRUE, allG = TRUE, fit = "factors", 
+                   se = "standard") {
   
   # Add a warning in case there is a pre-defined start and the user also requires a multi-start
   if (!(is.null(userStart)) && nstarts > 1) {
@@ -235,7 +236,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     # Split into lines
     lines_model <- unlist(strsplit(unlist(step1model), "\n"))
     rewritten <- c()
-
+    # browser()
     # Extract the observed variable names per factor
     # Exogenous factors
     for (i in 1:length(exog)) {
@@ -296,7 +297,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     endog1 <- endog1[-both.idx]
   }
   endog <- c(endog1, endog2)
-  exog <- lavNames(fake, "ov.x")
+  exog <- lavNames(fake)[!c(lavNames(fake) %in% endog)]
 
   # Do a fake model per endo LV (to avoid bias due to reconstruction of group-specific endo variances). For more info, please see the Appendix of the paper related to this code.
   # Please note that the index "lv" is used to identify each model per endo LV
@@ -331,7 +332,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     fake_lv[[lv]]@ParTable$se <- NULL
     fake_lv[[lv]]@Options$start <- "default"
   }
-
+ #browser()
   # Re-order (order of columns and rows) cov_eta to make sure later computations are comparing correct matrices
   cov_eta <- lapply(1:ngroups, function(x) {
     reorder(cov_eta[[x]])
@@ -421,7 +422,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
             cov_eta[[g]] * this_w[g]
           })
           COV[[k]] <- Reduce("+", tmp)
-          COV[[k]] <- 0.5 * (COV[[k]] + t(COV[[k]])) # Force the matrix to be symmetric
+          # COV[[k]] <- 0.5 * (COV[[k]] + t(COV[[k]])) # Force the matrix to be symmetric
         }
       } else if (i > 1) {
         # After the first iteration
@@ -440,7 +441,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
               cov_eta[[g]] * this_w[g]
             })
             COV_lv[[lv]][[k]] <- Reduce("+", tmp)
-            COV_lv[[lv]][[k]] <- 0.5 * (COV_lv[[lv]][[k]] + t(COV_lv[[lv]][[k]]))
+            # COV_lv[[lv]][[k]] <- 0.5 * (COV_lv[[lv]][[k]] + t(COV_lv[[lv]][[k]])) # Force symmetry
           }
         }
       }
@@ -454,10 +455,12 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         # Do this when allG is False OR when it is True and we are in the first iteration
         # For the first iteration, perform the full structural model estimation
         s2out <- lavaan(
-          slotOptions = fake@Options,
-          slotParTable = fake@ParTable,
-          sample.cov = COV,
-          sample.nobs = rep(nrow(dat), nclus)
+          slotOptions       = fake@Options,
+          slotParTable      = fake@ParTable,
+          sample.cov        = COV,
+          sample.nobs       = rep(nrow(dat), nclus),
+          se                = se,
+          information       = "observed"
           # slotModel       = slotModel,
           # slotData        = fake@Data,
           # slotSampleStats = fake@SampleStats
@@ -468,10 +471,12 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         s2out <- vector(mode = "list", length = length(endog))
         for (lv in 1:length(endog)) {
           s2out[[lv]] <- lavaan(
-            slotOptions = fake_lv[[lv]]@Options,
-            slotParTable = fake_lv[[lv]]@ParTable,
-            sample.cov = COV_lv[[lv]],
-            sample.nobs = rep(nrow(dat), nclus)
+            slotOptions       = fake_lv[[lv]]@Options,
+            slotParTable      = fake_lv[[lv]]@ParTable,
+            sample.cov        = COV_lv[[lv]],
+            sample.nobs       = rep(nrow(dat), nclus),
+            se                = se,
+            information       = "observed"
             # slotModel       = slotModel,
             # slotData        = fake@Data,
             # slotSampleStats = fake@SampleStats
