@@ -38,6 +38,7 @@
 #' @param allG TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
 #'             By default, is TRUE.
 #' @param fit String argument. Either "factors" or "observed". Determines which loglikelihood will be used to fit the model.
+#' @param est_method either "local" or "global. Follows local and global approaches from the SAM method.
 #'
 #' OUTPUT: The function will return a list with the following results:
 #' @return z_gks: Posterior classification probabilities or cluster memberships (ngroups*nclus matrix).
@@ -56,10 +57,10 @@
 
 MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
                    group, nclus, seed = NULL, userStart = NULL, s1out = NULL,
-                   max_it = 10000L, nstarts = 1L, printing = FALSE,
+                   max_it = 10000L, nstarts = 20L, printing = FALSE,
                    partition = "hard", NonInv = NULL, constraints = "loadings",
                    Endo2Cov = TRUE, allG = TRUE, fit = "factors", 
-                   se = "standard") {
+                   se = "standard", est_method = "local", meanstr = FALSE) {
   
   # Add a warning in case there is a pre-defined start and the user also requires a multi-start
   if (!(is.null(userStart)) && nstarts > 1) {
@@ -76,8 +77,14 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   # # Center the data per group (so that the mean for all variables in each group is 0)
   centered <- dat
   
-  # if the intercepts are not in the required constraints, then remove the mean structure of the data (i.e., center the data)
-  if(!c("intercepts" %in% constraints)){ 
+  # if the mean structure is not required, then remove the mean structure of the data (i.e., center the data)
+  # but, if the intercepts are required, then meanstr changes to TRUE
+  if(isFALSE(meanstr) & "intercepts" %in% constraints){
+    warning("If the intercepts are included in the constraints, then meanstr automatically changes to TRUE to include the mean structure.")
+    meanstr <- T
+  }
+  
+  if(isFALSE(meanstr)){ 
     group.idx <- match(dat[, group], g_name)
     group.sizes <- tabulate(group.idx)
     group.means <- rowsum.default(as.matrix(dat[, vars]),
@@ -272,32 +279,85 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
   # Do a fake sem() to obtain the correct settings to use in Step 2
   # just a single sample cov!
-  fake <- sem(
-    model = step2model, sample.cov = rep(cov_eta[1], nclus),
-    sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
-    baseline = FALSE,
-    h1 = FALSE, check.post = FALSE,
-    loglik = FALSE,
-    sample.cov.rescale = FALSE,
-    fixed.x = TRUE
-  )
-  FakeprTbl <- parTable(fake)
-  fake@Options$do.fit <- TRUE
-  fake@ParTable$start <- NULL
-  fake@ParTable$est <- NULL
-  fake@ParTable$se <- NULL
-  fake@Options$start <- "default"
+  if (est_method == "local"){
+    fake <- sem(
+      model = step2model, sample.cov = rep(cov_eta[1], nclus),
+      sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
+      baseline = FALSE,
+      h1 = FALSE, check.post = FALSE,
+      loglik = FALSE,
+      sample.cov.rescale = FALSE,
+      fixed.x = TRUE
+    )
+    FakeprTbl <- parTable(fake)
+    fake@Options$do.fit <- TRUE
+    fake@ParTable$start <- NULL
+    fake@ParTable$est   <- NULL
+    fake@ParTable$se    <- NULL
+    fake@Options$start  <- "default"
+    
+  } else if (est_method == "global"){
+    model.comb <- paste(step1model, step2model)
+    fake <- sem(
+      model = model.comb, data = dat, group = "group",
+      do.fit = FALSE,
+      baseline = FALSE,
+      h1 = FALSE, check.post = FALSE,
+      loglik = FALSE,
+      sample.cov.rescale = FALSE,
+      fixed.x = TRUE,
+      meanstructure = meanstr
+    )
+    
+    # Prepare a proper parameter table for later. We have to fix the MM parameters in the parameter table
+    FakeprTbl <- parTable(fake)
+    PT.MM     <- partable(S1output) # Parameter table MM
+    idx.str   <- which(PT.MM$rhs %in% lat_var)
+    PT.MM     <- PT.MM[-idx.str, ] # Remove structural parameters from PT.MM
+    
+    # Fill out MM parameters in the fake table
+    # First make a full parameter column including group
+    PT.MM$par     <- paste0(PT.MM$lhs, PT.MM$op, PT.MM$rhs, ".g", PT.MM$group)
+    FakeprTbl$par <- paste0(FakeprTbl$lhs, FakeprTbl$op, FakeprTbl$rhs, ".g", FakeprTbl$group)
+    
+    # Introduce the correct MM parameters
+    idx.par <- match(PT.MM$par, FakeprTbl$par) # indices of parameters from PT.MM on FakeprTbl
+    idx.par <- idx.par[!is.na(idx.par)]
+    FakeprTbl$ustart[idx.par] <- PT.MM$est[1:length(idx.par)] # The index makes sure we do not inlcude est from constraints in the partable
+    
+    # Leave only structural parameters as free parameters
+    FakeprTbl$free  <- 0
+    FakeprTbl$free[is.na(FakeprTbl$ustart)] <- 1:sum(is.na(FakeprTbl$ustart)) 
+    FakeprTbl$par   <- NULL
+    FakeprTbl$est   <- NULL
+    FakeprTbl$se    <- NULL
+    
+    fake@Options$do.fit <- TRUE
+    fake@ParTable$start <- NULL
+    fake@ParTable$est   <- NULL
+    fake@ParTable$se    <- NULL
+    fake@Options$start  <- "default"
+  }
+  
+ 
   # fake@Options$verbose <- TRUE
 
   # Get the labels of the endogenous 1 and 2 factors
-  endog2 <- lavNames(fake, "ov.y")
-  endog1 <- lavNames(fake, "eqs.y")
-  both.idx <- which(endog1 %in% endog2)
-  if (length(both.idx) > 0L) {
-    endog1 <- endog1[-both.idx]
-  }
+  endog1 <- lat_var[(lat_var %in% FakeprTbl$rhs[which(FakeprTbl$op == "~")]) &
+                      (lat_var %in% FakeprTbl$lhs[which(FakeprTbl$op == "~")])]
+  endog2 <- lat_var[!c(lat_var %in% FakeprTbl$rhs[which(FakeprTbl$op == "~")]) &
+                      (lat_var %in% FakeprTbl$lhs[which(FakeprTbl$op == "~")])]
   endog <- c(endog1, endog2)
-  exog <- lavNames(fake)[!c(lavNames(fake) %in% endog)]
+  exog <- lat_var[!c(lat_var %in% endog)]
+  
+  # endog2 <- lavNames(fake, "ov.y")
+  # endog1 <- lavNames(fake, "eqs.y")
+  # both.idx <- which(endog1 %in% endog2)
+  # if (length(both.idx) > 0L) {
+  #   endog1 <- endog1[-both.idx]
+  # }
+  # endog <- c(endog1, endog2)
+  # exog <- lavNames(fake, "lv")[!c(lavNames(fake, "lv") %in% endog)]
 
   # Do a fake model per endo LV (to avoid bias due to reconstruction of group-specific endo variances). For more info, please see the Appendix of the paper related to this code.
   # Please note that the index "lv" is used to identify each model per endo LV
@@ -309,22 +369,38 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     # Select the current latent variable
     this_lv <- endog[endog %in% endog[lv]]
 
-    # Keep the (co)variances of the other latent variables
-    var_not_this_lv <- which(FakeprTbl$lhs != this_lv & FakeprTbl$op == "~~")
+    # Keep the (co)variances of the other latent variables and (if global) the measurement parameters
+    var_not_this_lv <- which(FakeprTbl$lhs != this_lv & FakeprTbl$op == "~~") # keeps lv covariances and obs res variances
+    fac_load        <- which(FakeprTbl$op == "=~") 
 
     # Get the new parameter table per endogenous latent variable
-    prTbl_lv <- FakeprTbl[c(which(FakeprTbl$lhs == this_lv), var_not_this_lv), ]
+    prTbl_idx <- c(which(FakeprTbl$lhs == this_lv), fac_load, var_not_this_lv)
+    prTbl_idx <- sort(prTbl_idx)
+    prTbl_lv <- FakeprTbl[prTbl_idx, ]
 
     # Run the model per endo latent variable
-    fake_lv[[lv]] <- sem(
-      model = prTbl_lv, sample.cov = rep(cov_eta[1], nclus),
-      sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
-      baseline = FALSE,
-      h1 = FALSE, check.post = FALSE,
-      loglik = FALSE,
-      sample.cov.rescale = FALSE,
-      fixed.x = TRUE
-    )
+    if(est_method == "local"){
+      fake_lv[[lv]] <- sem(
+        model = prTbl_lv, sample.cov = rep(cov_eta[1], nclus),
+        sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
+        baseline = FALSE,
+        h1 = FALSE, check.post = FALSE,
+        loglik = FALSE,
+        sample.cov.rescale = FALSE,
+        fixed.x = TRUE
+      )
+    } else if (est_method == "global"){
+      fake_lv[[lv]] <- sem(
+        model = prTbl_lv, data = centered, group = "group",
+        do.fit = FALSE,
+        baseline = FALSE,
+        h1 = FALSE, check.post = FALSE,
+        loglik = FALSE,
+        sample.cov.rescale = FALSE,
+        fixed.x = TRUE,
+        meanstructure = meanstr
+      )
+    }
 
     fake_lv[[lv]]@Options$do.fit <- TRUE
     fake_lv[[lv]]@ParTable$start <- NULL
@@ -332,7 +408,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     fake_lv[[lv]]@ParTable$se <- NULL
     fake_lv[[lv]]@Options$start <- "default"
   }
- #browser()
+ 
   # Re-order (order of columns and rows) cov_eta to make sure later computations are comparing correct matrices
   cov_eta <- lapply(1:ngroups, function(x) {
     reorder(cov_eta[[x]])
@@ -450,30 +526,15 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
       # Call lavaan to estimate the structural parameters
       # the 'groups' are the clusters
       # Note: this makes all resulting parameters to be cluster-specific (it is reconstructed later)
-
+browser()
       if (isFALSE(allG) | i == 1) {
         # Do this when allG is False OR when it is True and we are in the first iteration
         # For the first iteration, perform the full structural model estimation
-        s2out <- lavaan(
-          slotOptions       = fake@Options,
-          slotParTable      = fake@ParTable,
-          sample.cov        = COV,
-          sample.nobs       = rep(nrow(dat), nclus),
-          se                = se,
-          information       = "observed"
-          # slotModel       = slotModel,
-          # slotData        = fake@Data,
-          # slotSampleStats = fake@SampleStats
-        )
-      } else if (i > 1) {
-        # After the first iteration
-        # Run structural estimation once per endo LV
-        s2out <- vector(mode = "list", length = length(endog))
-        for (lv in 1:length(endog)) {
-          s2out[[lv]] <- lavaan(
-            slotOptions       = fake_lv[[lv]]@Options,
-            slotParTable      = fake_lv[[lv]]@ParTable,
-            sample.cov        = COV_lv[[lv]],
+        if (est_method == "local"){
+          s2out <- lavaan(
+            slotOptions       = fake@Options,
+            slotParTable      = fake@ParTable,
+            sample.cov        = COV,
             sample.nobs       = rep(nrow(dat), nclus),
             se                = se,
             information       = "observed"
@@ -481,7 +542,57 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
             # slotData        = fake@Data,
             # slotSampleStats = fake@SampleStats
           )
+        } else if (est_method == "global"){
+          s2out <- lavaan(
+            slotOptions       = fake@Options,
+            model             = FakeprTbl,
+            data              = centered,
+            group             = "group",
+            meanstructure     = meanstr,
+            se                = se,
+            information       = "observed"
+            # slotModel       = slotModel,
+            # slotData        = fake@Data,
+            # slotSampleStats = fake@SampleStats
+          )
         }
+        
+      } else if (i > 1) {
+        # After the first iteration
+        # Run structural estimation once per endo LV
+        s2out <- vector(mode = "list", length = length(endog))
+        
+        if (est_method == "local"){
+          for (lv in 1:length(endog)) {
+            s2out[[lv]] <- lavaan(
+              slotOptions       = fake_lv[[lv]]@Options,
+              slotParTable      = fake_lv[[lv]]@ParTable,
+              sample.cov        = COV_lv[[lv]],
+              sample.nobs       = rep(nrow(dat), nclus),
+              se                = se,
+              information       = "observed"
+              # slotModel       = slotModel,
+              # slotData        = fake@Data,
+              # slotSampleStats = fake@SampleStats
+            )
+          }
+        } else if (est_method == "global"){
+          for (lv in 1:length(endog)) {
+            s2out[[lv]] <- lavaan(
+              slotOptions       = fake_lv[[lv]]@Options,
+              slotParTable      = partable(fake_lv[[lv]]),
+              group             = "group",
+              data              = centered,
+              meanstructure     = meanstr,
+              se                = se,
+              information       = "observed"
+              # slotModel       = slotModel,
+              # slotData        = fake@Data,
+              # slotSampleStats = fake@SampleStats
+            )
+          }
+        }
+        
       }
 
 
