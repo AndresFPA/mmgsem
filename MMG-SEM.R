@@ -291,6 +291,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     )
     FakeprTbl <- parTable(fake)
     fake@Options$do.fit <- TRUE
+    fake@Options$se     <- se
     fake@ParTable$start <- NULL
     fake@ParTable$est   <- NULL
     fake@ParTable$se    <- NULL
@@ -323,7 +324,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     # Introduce the correct MM parameters
     idx.par <- match(PT.MM$par, FakeprTbl$par) # indices of parameters from PT.MM on FakeprTbl
     idx.par <- idx.par[!is.na(idx.par)]
-    FakeprTbl$ustart[idx.par] <- PT.MM$est[1:length(idx.par)] # The index makes sure we do not inlcude est from constraints in the partable
+    FakeprTbl$ustart[idx.par] <- PT.MM$est[1:length(idx.par)] # The index makes sure we do not include est from constraints in the partable
     
     # Leave only structural parameters as free parameters
     FakeprTbl$free  <- 0
@@ -331,11 +332,12 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     FakeprTbl$par   <- NULL
     FakeprTbl$est   <- NULL
     FakeprTbl$se    <- NULL
+    FakeprTbl$start    <- NULL
     
     fake@Options$do.fit <- TRUE
-    fake@ParTable$start <- NULL
-    fake@ParTable$est   <- NULL
-    fake@ParTable$se    <- NULL
+    # fake@ParTable$start <- NULL
+    # fake@ParTable$est   <- NULL
+    # fake@ParTable$se    <- NULL
     fake@Options$start  <- "default"
   }
   
@@ -362,26 +364,27 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   # Do a fake model per endo LV (to avoid bias due to reconstruction of group-specific endo variances). For more info, please see the Appendix of the paper related to this code.
   # Please note that the index "lv" is used to identify each model per endo LV
   # Please also note that this is used AFTER the first iteration. In the first iteration we start with only one model
-  fake_lv <- vector(mode = "list", length = length(endog))
+  fake_lv  <- vector(mode = "list", length = length(endog))
+  prTbl_lv <- vector(mode = "list", length = length(endog))
 
   for (lv in 1:length(endog)) {
     # Create a parameter table per endogenous latent variables
     # Select the current latent variable
     this_lv <- endog[endog %in% endog[lv]]
-
+    # browser()
     # Keep the (co)variances of the other latent variables and (if global) the measurement parameters
     var_not_this_lv <- which(FakeprTbl$lhs != this_lv & FakeprTbl$op == "~~") # keeps lv covariances and obs res variances
-    fac_load        <- which(FakeprTbl$op == "=~") 
+    fac_load        <- which(FakeprTbl$lhs != this_lv & FakeprTbl$op == "=~") # Factor load of other factors
 
     # Get the new parameter table per endogenous latent variable
-    prTbl_idx <- c(which(FakeprTbl$lhs == this_lv), fac_load, var_not_this_lv)
-    prTbl_idx <- sort(prTbl_idx)
-    prTbl_lv <- FakeprTbl[prTbl_idx, ]
+    prTbl_idx       <- c(which(FakeprTbl$lhs == this_lv), fac_load, var_not_this_lv)
+    prTbl_idx       <- sort(prTbl_idx)
+    prTbl_lv[[lv]]  <- FakeprTbl[prTbl_idx, ]
 
     # Run the model per endo latent variable
     if(est_method == "local"){
       fake_lv[[lv]] <- sem(
-        model = prTbl_lv, sample.cov = rep(cov_eta[1], nclus),
+        model = prTbl_lv[[lv]], sample.cov = rep(cov_eta[1], nclus),
         sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
         baseline = FALSE,
         h1 = FALSE, check.post = FALSE,
@@ -389,9 +392,17 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         sample.cov.rescale = FALSE,
         fixed.x = TRUE
       )
+      
+      fake_lv[[lv]]@Options$do.fit <- TRUE
+      fake_lv[[lv]]@Options$se     <- se
+      fake_lv[[lv]]@ParTable$start <- NULL
+      fake_lv[[lv]]@ParTable$est   <- NULL
+      fake_lv[[lv]]@ParTable$se    <- NULL
+      fake_lv[[lv]]@Options$start  <- "default"
+      
     } else if (est_method == "global"){
       fake_lv[[lv]] <- sem(
-        model = prTbl_lv, data = centered, group = "group",
+        model = prTbl_lv[[lv]], data = centered, group = "group",
         do.fit = FALSE,
         baseline = FALSE,
         h1 = FALSE, check.post = FALSE,
@@ -400,13 +411,20 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         fixed.x = TRUE,
         meanstructure = meanstr
       )
+      # Leave only structural parameters as free parameters
+      prTbl_lv[[lv]]$free  <- 0
+      prTbl_lv[[lv]]$free[is.na(prTbl_lv[[lv]]$ustart)] <- 1:sum(is.na(prTbl_lv[[lv]]$ustart)) 
+      prTbl_lv[[lv]]$par   <- NULL
+      prTbl_lv[[lv]]$est   <- NULL
+      prTbl_lv[[lv]]$se    <- NULL
+      prTbl_lv[[lv]]$start    <- NULL
+      
+      fake_lv[[lv]]@Options$do.fit <- TRUE
+      # fake_lv[[lv]]@ParTable$start <- NULL
+      # fake_lv[[lv]]@ParTable$est <- NULL
+      # fake_lv[[lv]]@ParTable$se <- NULL
+      fake_lv[[lv]]@Options$start <- "default"
     }
-
-    fake_lv[[lv]]@Options$do.fit <- TRUE
-    fake_lv[[lv]]@ParTable$start <- NULL
-    fake_lv[[lv]]@ParTable$est <- NULL
-    fake_lv[[lv]]@ParTable$se <- NULL
-    fake_lv[[lv]]@Options$start <- "default"
   }
  
   # Re-order (order of columns and rows) cov_eta to make sure later computations are comparing correct matrices
@@ -526,7 +544,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
       # Call lavaan to estimate the structural parameters
       # the 'groups' are the clusters
       # Note: this makes all resulting parameters to be cluster-specific (it is reconstructed later)
-browser()
+
       if (isFALSE(allG) | i == 1) {
         # Do this when allG is False OR when it is True and we are in the first iteration
         # For the first iteration, perform the full structural model estimation
@@ -546,8 +564,8 @@ browser()
           s2out <- lavaan(
             slotOptions       = fake@Options,
             model             = FakeprTbl,
-            data              = centered,
-            group             = "group",
+            sample.cov        = COV,
+            sample.nobs       = rep(nrow(dat), nclus),
             meanstructure     = meanstr,
             se                = se,
             information       = "observed"
@@ -577,12 +595,13 @@ browser()
             )
           }
         } else if (est_method == "global"){
+          # browser()
           for (lv in 1:length(endog)) {
             s2out[[lv]] <- lavaan(
               slotOptions       = fake_lv[[lv]]@Options,
-              slotParTable      = partable(fake_lv[[lv]]),
-              group             = "group",
-              data              = centered,
+              model             = prTbl_lv[[lv]],
+              sample.cov        = COV_lv[[lv]],
+              sample.nobs       = rep(nrow(dat), nclus),
               meanstructure     = meanstr,
               se                = se,
               information       = "observed"
@@ -730,23 +749,37 @@ browser()
           psi_gks[[g, k]] <- psi
 
           # Get log-likelihood by comparing factor covariance matrix of step 1 (cov_eta) and step 2 (Sigma)
-
-          if (fit == "factors") {
-            # Estimate Sigma (factor covariance matrix of step 2)
-            Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
-            Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
-
-            # Estimate the loglikelihood
-            loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
-              sample.mean = rep(0, nrow(cov_eta[[1]])),
-              sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
-              # sample.nobs = N_gks[g, k],
-              sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
-              Mu          = rep(0, nrow(cov_eta[[1]])),
-              Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
-            )
-          } else if (fit == "observed") {
-            # browser()
+          
+          if (est_method == "local"){
+            if (fit == "factors") {
+              # Estimate Sigma (factor covariance matrix of step 2)
+              Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
+              Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
+              
+              # Estimate the loglikelihood
+              loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+                sample.mean = rep(0, nrow(cov_eta[[1]])),
+                sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+                # sample.nobs = N_gks[g, k],
+                sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
+                Mu          = rep(0, nrow(cov_eta[[1]])),
+                Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
+              )
+            } else if (fit == "observed") {
+              # browser()
+              S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
+              Sigma[[g, k]] <- lambda_gs[[g]] %*% solve(I - beta) %*% psi %*% t(solve(I - beta)) %*% t(lambda_gs[[g]]) + theta_gs[[g]]
+              Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
+              # Sigma[[g, k]][lower.tri(Sigma[[g, k]])] <- t(Sigma[[g, k]])[lower.tri(Sigma[[g, k]])]
+              loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+                sample.mean = rep(0, length(vars)),
+                sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+                sample.cov  = S_biased, # Item (observed) covariance matrix from step 1
+                Mu          = rep(0, length(vars)),
+                Sigma       = Sigma[[g, k]] # Item (observed) covariance matrix from step 2
+              )
+            }
+          } else if (est_method == "global"){
             S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
             Sigma[[g, k]] <- lambda_gs[[g]] %*% solve(I - beta) %*% psi %*% t(solve(I - beta)) %*% t(lambda_gs[[g]]) + theta_gs[[g]]
             Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
