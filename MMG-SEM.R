@@ -38,7 +38,7 @@
 #' @param allG TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
 #'             By default, is TRUE.
 #' @param fit String argument. Either "factors" or "observed". Determines which loglikelihood will be used to fit the model.
-#' @param est_method either "local" or "global. Follows local and global approaches from the SAM method.
+#' @param est_method either "local" or "global. Follows local and global approaches from the SAM method. GLOBAL NOT FUNCTIONAL YET.
 #'
 #' OUTPUT: The function will return a list with the following results:
 #' @return z_gks: Posterior classification probabilities or cluster memberships (ngroups*nclus matrix).
@@ -53,7 +53,7 @@
 #'                     fit is "factors".
 #'
 #' PLEASE NOTE: This function requires 'lavaan' package to work. It also requires the function 'EStep.R'.
-#'
+#' ################################# ALL GLOBAL SAM CODE IS NOT FUNCTIONAL YET #########################################
 
 MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
                    group, nclus, seed = NULL, userStart = NULL, s1out = NULL,
@@ -287,7 +287,8 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
       h1 = FALSE, check.post = FALSE,
       loglik = FALSE,
       sample.cov.rescale = FALSE,
-      fixed.x = TRUE
+      fixed.x = TRUE,
+      information = "observed"
     )
     FakeprTbl <- parTable(fake)
     fake@Options$do.fit <- TRUE
@@ -390,7 +391,8 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         h1 = FALSE, check.post = FALSE,
         loglik = FALSE,
         sample.cov.rescale = FALSE,
-        fixed.x = TRUE
+        fixed.x = TRUE,
+        information = "observed"
       )
       
       fake_lv[[lv]]@Options$do.fit <- TRUE
@@ -554,8 +556,6 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
             slotParTable      = fake@ParTable,
             sample.cov        = COV,
             sample.nobs       = rep(nrow(dat), nclus),
-            se                = se,
-            information       = "observed"
             # slotModel       = slotModel,
             # slotData        = fake@Data,
             # slotSampleStats = fake@SampleStats
@@ -586,9 +586,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
               slotOptions       = fake_lv[[lv]]@Options,
               slotParTable      = fake_lv[[lv]]@ParTable,
               sample.cov        = COV_lv[[lv]],
-              sample.nobs       = rep(nrow(dat), nclus),
-              se                = se,
-              information       = "observed"
+              sample.nobs       = rep(nrow(dat), nclus)
               # slotModel       = slotModel,
               # slotData        = fake@Data,
               # slotSampleStats = fake@SampleStats
@@ -1048,17 +1046,17 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   names(beta_ks) <- paste("Cluster", seq_len(nclus))
 
   return(list(
-    z_gks = z_gks,
-    final_fit = s2out,
-    psi_gks = psi_gks,
-    lambda = lambda_gs, # Lambda is invariant across all groups
-    MM = S1output, # Output of step 1 (measurement model)
-    cov_eta = cov_eta, # Factor covariance matrix from first step
-    beta_ks = beta_ks,
+    z_gks         = z_gks,
+    final_fit     = s2out,
+    psi_gks       = psi_gks,
+    lambda        = lambda_gs, # Lambda is invariant across all groups
+    MM            = S1output, # Output of step 1 (measurement model)
+    cov_eta       = cov_eta, # Factor covariance matrix from first step
+    beta_ks       = beta_ks,
     loglikelihood = LL,
-    loglik_gkw = loglik_gksw,
-    runs_loglik = loglik_nstarts,
-    obs_loglik = Obs.LL,
+    loglik_gkw    = loglik_gksw,
+    runs_loglik   = loglik_nstarts,
+    obs_loglik    = Obs.LL,
     BIC = list(
       observed = list(BIC_N = Obs.BIC_N, BIC_G = Obs.BIC_G),
       Factors = list(BIC_N = BIC_N, BIC_G = BIC_G)
@@ -1067,6 +1065,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
       observed = Obs.AIC,
       Factors = AIC
     ),
-    NrPar = list(Obs.nrpar = nr_pars, Fac.nrpar = nr_par_factors)
+    NrPar         = list(Obs.nrpar = nr_pars, Fac.nrpar = nr_par_factors),
+    N_gs          = N_gs
   ))
 }
