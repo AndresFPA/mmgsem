@@ -1025,6 +1025,158 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   # Factors
   AIC <- (-2 * LL) + (nr_par_factors * 2)
   
+  # Calculate the Standard Errors of the structural parameters
+  # To calculate the SE, we use the Hessian (second derivative) of the structural parameters.
+  # For the derivative, we use the numDeriv package which requires a parameter vector and an obj. function
+  # (1) Get all necesseary objects for the objective function
+  # Get the parameter vector
+  beta_vec <- unlist(beta_ks)[unlist(beta_ks) != 0]
+  cov_vec  <- c()
+  for(k in 1:nclus){cov_vec  <- c(cov_vec, unique(unlist(psi_gks[, k])[unlist(psi_gks) != 0]))} # The loop is done to remove the repeated covariances
+  cov_vec <- cov_vec[!is.na(cov_vec)] 
+  
+  # How many regressions and covariances per cluster?
+  n_reg_perk <- n_reg 
+  n_cov_pergk <- n_cov_exo + Q_endo1 + n_cov_endo2
+  
+  # Get indices needed for the objective function 
+  idx.beta    <- which(beta_ks[[1]] %in% beta_vec[1:n_reg_perk])
+  idx.psi     <- which(psi_gks[[1, 1]] %in% cov_vec)
+  idx.psi_vec <- match(psi_gks[[1, 1]][idx.psi], cov_vec[1:n_cov_pergk])
+  
+  # (2) Create the objective function of the step 2 parameters
+  # The objective function simply takes the parameter vector and fills in the corresponding matrix to get the LL
+  obj.S2 <- function(x, beta_mat, psi_mat, pi_ks, cov_eta, 
+                     nclus, ngroups, N_gs, 
+                     idx.beta, idx.psi, idx.psi_vec){
+    
+    n_reg <- length(unlist(beta_mat)[unlist(beta_mat) != 0])
+    
+    betas <- x[1:n_reg]
+    covs  <- x[(n_reg + 1):length(x)]
+    
+    n_psi <- length(covs)
+    
+    clus_idx <- n_reg/nclus
+    for(k in 1:nclus){
+      beta_vec <- betas[(((k - 1)*clus_idx) + 1):(clus_idx*k)]
+      beta_mat[[k]][idx.beta] <- beta_vec
+    }
+    
+    psi_gks <- psi_mat
+    clus_idx <- n_psi/(nclus*ngroups)
+    gk <- 0
+    for(k in 1:nclus){
+      for(g in 1:ngroups){
+        gk <- gk + 1
+        cov_vec <- covs[(((gk - 1)*clus_idx) + 1):(clus_idx*gk)]
+        psi_mat[[g, k]][idx.psi] <- cov_vec[idx.psi_vec]
+      }
+    }
+    
+    
+    # compute loglikelihood for all group/cluster combinations
+    # Initialize matrices to store loglikelihoods
+    loglik_gks <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+    loglik_gksw <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+    
+    Sigma <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+    I <- diag(nrow(cov_eta[[1]]))
+    
+    for(k in 1:nclus){
+      for(g in 1:ngroups){
+        # Estimate Sigma (factor covariance matrix of step 2)
+        Sigma[[g, k]] <- solve(I - beta_mat[[k]]) %*% psi_mat[[g, k]] %*% t(solve(I - beta_mat[[k]]))
+        # Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
+        
+        # Estimate the loglikelihood
+        loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          sample.mean = rep(0, nrow(cov_eta[[1]])),
+          sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+          # sample.nobs = N_gks[g, k],
+          sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
+          Mu          = rep(0, nrow(cov_eta[[1]])),
+          Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
+        )
+        
+        loglik_gks[g, k] <- loglik_gk
+        loglik_gksw[g, k] <- log(pi_ks[k]) + loglik_gk # weighted loglik
+      }
+    }
+    
+    # Get total loglikelihood
+    # First, deal with arithmetic underflow by subtracting the maximum value per group
+    max_gs <- apply(loglik_gksw, 1, max) # Get max value per row
+    minus_max <- sweep(x = loglik_gksw, MARGIN = 1, STATS = max_gs, FUN = "-") # Subtract the max per row
+    exp_loglik <- exp(minus_max) # Exp before summing for total loglikelihood
+    loglik_gsw <- log(apply(exp_loglik, 1, sum)) # Sum exp_loglik per row and then take the log again
+    LL <- sum((loglik_gsw + max_gs)) # Add the maximum again and then sum them all for total loglikelihood
+    
+    return(LL)
+  }
+  browser()
+  # (3) Use the numDeriv package to get the second derivative of the step 2 parameters
+  HESS <- numDeriv::hessian(func     = obj.S2,
+                            x        = c(beta_vec, cov_vec), 
+                            beta_mat = beta_ks, 
+                            psi_mat  = psi_gks, 
+                            pi_ks    = colMeans(z_gks), 
+                            cov_eta  = cov_eta,
+                            nclus    = nclus,
+                            ngroups = ngroups,
+                            N_gs     = N_gs, 
+                            idx.beta = idx.beta, 
+                            idx.psi  = idx.psi, 
+                            idx.psi_vec = idx.psi_vec)
+  
+  # (4) Organize the SE for each parameter
+  vector_SE <- sqrt(diag(solve(-HESS))) # The SE comes from the inverse of the negative hessian
+  
+  SE.S2 <- function(x, beta_mat, psi_mat, cov_eta, 
+                    nclus, ngroups, N_gs, 
+                    idx.beta, idx.psi, idx.psi_vec){
+    
+    n_reg <- length(unlist(beta_mat)[unlist(beta_mat) != 0])
+    
+    betas <- x[1:n_reg]
+    covs  <- x[(n_reg + 1):length(x)]
+    
+    n_psi <- length(covs)
+    
+    clus_idx <- n_reg/nclus
+    for(k in 1:nclus){
+      beta_vec <- betas[(((k - 1)*clus_idx) + 1):(clus_idx*k)]
+      beta_mat[[k]][idx.beta] <- beta_vec
+    }
+    
+    psi_gks <- psi_mat
+    clus_idx <- n_psi/(nclus*ngroups)
+    gk <- 0
+    for(k in 1:nclus){
+      for(g in 1:ngroups){
+        gk <- gk + 1
+        cov_vec <- covs[(((gk - 1)*clus_idx) + 1):(clus_idx*gk)]
+        psi_mat[[g, k]][idx.psi] <- cov_vec[idx.psi_vec]
+      }
+    }
+    
+    return(list(
+      betas_SE = beta_mat,
+      psi_SE   = psi_mat
+    ))
+  }
+  
+  SE <- SE.S2(x        = vector_SE, 
+              beta_mat = beta_ks, 
+              psi_mat  = psi_gks,
+              cov_eta  = cov_eta,
+              nclus    = nclus,
+              ngroups = ngroups,
+              N_gs     = N_gs, 
+              idx.beta = idx.beta, 
+              idx.psi  = idx.psi, 
+              idx.psi_vec = idx.psi_vec)
+  
   # Re order matrices so that we get them in the following order:
   # (1) Exogenous latent variables
   # (2) Endogenous latent variables: independent and dependent variables at the same time
@@ -1066,6 +1218,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
       Factors = AIC
     ),
     NrPar         = list(Obs.nrpar = nr_pars, Fac.nrpar = nr_par_factors),
-    N_gs          = N_gs
+    N_gs          = N_gs,
+    SE            = SE
   ))
 }
