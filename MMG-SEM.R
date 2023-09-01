@@ -1077,6 +1077,12 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     idx.psi  <- which(psi_gks[[1, 1]] %in% cov_vec) # indices of the free parameters in the psi matrix 
     idx.psi_vec <- match(psi_gks[[1, 1]][idx.psi], cov_vec[1:n_cov]) # To repeat the free parameters that needs to be repeated (i.e, covariances)
     
+    # I have group-specific covariances and group-cluster specific covariances.
+    # Which ones are group-specific? 
+    g.covs  <- unique(cov_vec[duplicated(cov_vec)]) # Group-specific (why duplicated? I extract all possible group-cluster combination, but the group-specific ones will be repeated on the second cluster) 
+    g.covs  <- setNames(object = g.covs, nm = names(cov_vec[cov_vec %in% g.covs])[1:length(g.covs)])
+    gk.covs <- cov_vec[!c(cov_vec %in% g.covs)] # Group-cluster specific
+    
     # (2) Create the objective function of the step 2 parameters
     # The objective function simply takes the parameter vector and fills in the corresponding matrix to get the LL
     obj.S2 <- function(x, beta_mat, psi_mat, pi_ks, cov_eta, 
@@ -1240,7 +1246,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
                             idx.psi_vec = idx.psi_vec)
     
     # (4) Organize the SE for each parameter
-    vector_SE <- setNames(diag(sqrt(ginv(-HESS, tol = 1e-05))), colnames(HESS.m)) # The SE comes from the inverse of the negative hessian
+    vector_SE <- setNames(diag(sqrt(ginv(-HESS, tol = 1e-05))), colnames(HESS)) # The SE comes from the inverse of the negative hessian
     
     SE.S2 <- function(x, beta_mat, psi_mat, cov_eta, 
                       nclus, ngroups, N_gs, 
@@ -1341,6 +1347,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     ),
     NrPar         = list(Obs.nrpar = nr_pars, Fac.nrpar = nr_par_factors),
     N_gs          = N_gs,
-    SE            = SE
+    SE            = SE,
+    est.vec       = list(beta = beta_vec, psi = cov_vec)
   ))
 }
