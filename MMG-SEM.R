@@ -1032,51 +1032,89 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     # For the derivative, we use the numDeriv package which requires a parameter vector and an obj. function
     # (1) Get all necesseary objects for the objective function
     # Get the parameter vector
-    beta_vec <- unlist(beta_ks)[unlist(beta_ks) != 0]
-    cov_vec  <- c()
-    for(k in 1:nclus){cov_vec  <- c(cov_vec, unique(unlist(psi_gks[, k])[unlist(psi_gks) != 0]))} # The loop is done to remove the repeated covariances
-    cov_vec <- cov_vec[!is.na(cov_vec)] 
+    # Regressions (Cluster-specific!)
+    beta_vec <- c() # Empty vector for the betas
+    beta_nam <- c() # Empty vector for the names of such betas (not truly necessary, but makes everything easier to understand)
     
-    # How many regressions and covariances per cluster?
-    n_reg_perk <- n_reg 
-    n_cov_pergk <- n_cov_exo + Q_endo1 + n_cov_endo2
+    # The loop identifies the non-zero parameters (i.e., the free parameters) in the beta matrices
+    # It also saves the number of the parameter using the col and row names of the beta matrices (e.g., F3 ~ F1)
+    for(k in 1:nclus){
+      non_zer.idx <- which(unlist(beta_ks[[k]]) != 0)
+      beta_vec <- c(beta_vec, unlist(beta_ks[[k]])[non_zer.idx])
+      beta_nam <- c(beta_nam, as.vector(outer(X = rownames(beta_ks[[k]]), 
+                                              Y = colnames(beta_ks[[k]]), 
+                                              function(x, y) paste0(x, "~", y, ".", k)))[non_zer.idx])
+    }
     
-    # Get indices needed for the objective function 
-    idx.beta    <- which(beta_ks[[1]] %in% beta_vec[1:n_reg_perk])
-    idx.psi     <- which(psi_gks[[1, 1]] %in% cov_vec)
-    idx.psi_vec <- match(psi_gks[[1, 1]][idx.psi], cov_vec[1:n_cov_pergk])
+    beta_vec <- setNames(object = beta_vec, nm = beta_nam) # Name the vector (the .1 and .2 represent the cluster)
+    
+    # Factor covariances (Group-cluster specific!)
+    cov_vec <- c() # Empty vector for the covariances
+    cov_nam <- c() # Empty vector for the names of such covs
+    
+    # The loop is similar the one of the betas.
+    # Note there is an extra index (i.e., unique.idx). Given that the cov matrix is symmetric, some parameters are repeated.
+    # However, even if repeated, it is only one parameter. The unique.idx removes the repeated parameter.
+    for(k in 1:nclus){
+      for(g in 1:ngroups){
+        non_zer.idx <- which(unlist(psi_gks[[g, k]]) != 0)
+        unique.idx  <- !duplicated(unlist(psi_gks[[g, k]])[non_zer.idx])
+        cov_vec <- c(cov_vec, unlist(psi_gks[[g, k]])[non_zer.idx][unique.idx])
+        cov_nam <- c(cov_nam, as.vector(outer(X = rownames(psi_gks[[g, k]]),
+                                              Y = rownames(psi_gks[[g, k]]),
+                                              function(x, y) paste0(x, "~~", y, ".", g, ".", k)))[non_zer.idx][unique.idx])
+      }
+    }
+    
+    cov_vec <- setNames(object = cov_vec, nm = cov_nam) # Name the vector (the first number after the . is the group, the second number is the cluster)
+    
+    # How many regressions and covariances?
+    n_reg <- length(beta_vec)/nclus # nclus
+    n_cov <- length(cov_vec)/(nclus*ngroups) # nclus*ngroups
+    
+    # Get indices needed for the objective function (used to input the value of the vector in corresponding place of the matrix)
+    idx.beta <- which(beta_ks[[1]] %in% beta_vec[1:n_reg]) # indices of the free parameters in the beta matrix 
+    idx.psi  <- which(psi_gks[[1, 1]] %in% cov_vec) # indices of the free parameters in the psi matrix 
+    idx.psi_vec <- match(psi_gks[[1, 1]][idx.psi], cov_vec[1:n_cov]) # To repeat the free parameters that needs to be repeated (i.e, covariances)
     
     # (2) Create the objective function of the step 2 parameters
     # The objective function simply takes the parameter vector and fills in the corresponding matrix to get the LL
     obj.S2 <- function(x, beta_mat, psi_mat, pi_ks, cov_eta, 
-                       nclus, ngroups, N_gs, 
-                       idx.beta, idx.psi, idx.psi_vec){
+                       nclus, ngroups, N_gs, idx.beta, idx.psi, idx.psi_vec,
+                       n_cov_exo){
+      # browser()
+      n_reg <- length(unlist(beta_mat)[unlist(beta_mat) != 0]) # How many free regression do we have?
       
-      n_reg <- length(unlist(beta_mat)[unlist(beta_mat) != 0])
+      betas <- x[1:n_reg] # The first parameters are always the regressions. Extract them.
+      covs  <- x[(n_reg + 1):length(x)] # The rest of the parameters are the covariances
+      g.covs  <- covs[1:(n_cov_exo*ngroups)] # Which ones are the group-specific? Use the number of (co)variances * ngroups 
+      gk.covs <- covs[!c(covs %in% g.covs)] # The rest are the group-cluster specific covariances
       
-      betas <- x[1:n_reg]
-      covs  <- x[(n_reg + 1):length(x)]
+      # How many?
+      n_g.psi <- length(g.covs) 
+      n_gk.psi <- length(gk.covs)
       
-      n_psi <- length(covs)
-      
-      clus_idx <- n_reg/nclus
+      # Input the correct beta parameter in the matrix
+      clus_idx <- n_reg/nclus # How many regression per cluster?
       for(k in 1:nclus){
         beta_vec <- betas[(((k - 1)*clus_idx) + 1):(clus_idx*k)]
         beta_mat[[k]][idx.beta] <- beta_vec
       }
       
+      # Input the correct psi parameter in the matrix
       psi_gks <- psi_mat
-      clus_idx <- n_psi/(nclus*ngroups)
-      gk <- 0
+      g.clus_idx <- n_g.psi/(ngroups) # How many g.psi per group?
+      gk.clus_idx <- n_gk.psi/(nclus*ngroups) # How many gk.psi per group-cluster?
+      gk <- 0 # group-cluster counter
       for(k in 1:nclus){
         for(g in 1:ngroups){
           gk <- gk + 1
-          cov_vec <- covs[(((gk - 1)*clus_idx) + 1):(clus_idx*gk)]
-          psi_mat[[g, k]][idx.psi] <- cov_vec[idx.psi_vec]
+          cov_vec <- c(g.covs[(((g - 1)*g.clus_idx) + 1):(g.clus_idx*g)], gk.covs[(((gk - 1)*gk.clus_idx) + 1):(gk.clus_idx*gk)])
+          psi_mat[[g, k]][idx.psi] <- cov_vec[idx.psi_vec] # A part is group-specific and the other part is group-cluster-specific
         }
       }
       
-      
+      # Compute loglikelihood. Unrelated to the assignment of the parameters. This simply calculate the logL
       # compute loglikelihood for all group/cluster combinations
       # Initialize matrices to store loglikelihoods
       loglik_gks <- matrix(data = 0, nrow = ngroups, ncol = nclus)
@@ -1116,67 +1154,146 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
       
       return(LL)
     }
-     browser()
-    # (3) Use the numDeriv package to get the second derivative of the step 2 parameters
-    HESS <- numDeriv::hessian(func     = obj.S2,
-                              x        = c(beta_vec, cov_vec), 
-                              beta_mat = beta_ks, 
-                              psi_mat  = psi_gks, 
-                              pi_ks    = colMeans(z_gks), 
-                              cov_eta  = cov_eta,
-                              nclus    = nclus,
-                              ngroups  = ngroups,
-                              N_gs     = N_gs, 
-                              idx.beta = idx.beta, 
-                              idx.psi  = idx.psi, 
-                              idx.psi_vec = idx.psi_vec)
+     
+    # (3) Create a function to compute the Hessian numerically, and use it.
+    compute_hessian <- function(f, x, d = 1e-5,
+                                beta_mat, psi_mat, pi_ks, cov_eta, 
+                                nclus, ngroups, N_gs, idx.beta, idx.psi, idx.psi_vec,
+                                n_cov_exo) {
+      # browser()
+      n  <- length(x)
+      H  <- matrix(0, n, n)
+      colnames(H) <- rownames(H) <- names(x)
+      f1 <- matrix(0, n)
+      
+      f0 <- f(x = x, 
+              beta_mat = beta_mat, 
+              psi_mat = psi_mat, 
+              pi_ks = pi_ks, 
+              cov_eta = cov_eta, 
+              nclus = nclus, 
+              ngroups = ngroups, 
+              N_gs = N_gs, 
+              idx.beta = idx.beta, 
+              idx.psi = idx.psi, 
+              idx.psi_vec = idx.psi_vec,
+              n_cov_exo = n_cov_exo)
+      
+      for (i in 1:n) {
+        x_up    <- x
+        x_up[i] <- x_up[i] + d
+        
+        f1[i]   <- f(x = x_up, 
+                     beta_mat = beta_mat, 
+                     psi_mat = psi_mat, 
+                     pi_ks = pi_ks, 
+                     cov_eta = cov_eta, 
+                     nclus = nclus, 
+                     ngroups = ngroups, 
+                     N_gs = N_gs, 
+                     idx.beta = idx.beta, 
+                     idx.psi = idx.psi, 
+                     idx.psi_vec = idx.psi_vec,
+                     n_cov_exo = n_cov_exo)
+        
+        for (j in 1:i) {
+          x_up[j] <- x_up[j] + d
+          
+          f2      <- f(x = x_up, 
+                       beta_mat = beta_mat, 
+                       psi_mat = psi_mat, 
+                       pi_ks = pi_ks, 
+                       cov_eta = cov_eta, 
+                       nclus = nclus, 
+                       ngroups = ngroups, 
+                       N_gs = N_gs, 
+                       idx.beta = idx.beta, 
+                       idx.psi = idx.psi, 
+                       idx.psi_vec = idx.psi_vec,
+                       n_cov_exo = n_cov_exo)
+          
+          H[i, j] <- (f2 - f1[i] - f1[j] + f0) / (d^2)
+          H[j, i] <- H[i, j]
+          
+          x_up[j] <- x_up[j] - d
+        }
+      }
+      
+      return(H)
+    }
+    
+    x <- c(beta_vec, g.covs, gk.covs)
+    
+    HESS <- compute_hessian(f         = obj.S2,
+                            x         = x, 
+                            d         = 1e-05, 
+                            beta_mat  = beta_ks, 
+                            psi_mat   = psi_gks, 
+                            pi_ks     = colMeans(z_gks), 
+                            cov_eta   = cov_eta,
+                            nclus     = nclus,
+                            ngroups   = ngroups,
+                            n_cov_exo = n_cov_exo,
+                            N_gs      = N_gs, 
+                            idx.beta  = idx.beta, 
+                            idx.psi   = idx.psi, 
+                            idx.psi_vec = idx.psi_vec)
     
     # (4) Organize the SE for each parameter
-    vector_SE <- sqrt(diag(solve(-HESS))) # The SE comes from the inverse of the negative hessian
+    vector_SE <- setNames(diag(sqrt(ginv(-HESS, tol = 1e-05))), colnames(HESS.m)) # The SE comes from the inverse of the negative hessian
     
     SE.S2 <- function(x, beta_mat, psi_mat, cov_eta, 
                       nclus, ngroups, N_gs, 
-                      idx.beta, idx.psi, idx.psi_vec){
+                      idx.beta, idx.psi, idx.psi_vec, n_cov_exo){
       
-      n_reg <- length(unlist(beta_mat)[unlist(beta_mat) != 0])
+      n_reg <- length(unlist(beta_mat)[unlist(beta_mat) != 0]) # How many free regression do we have?
       
-      betas <- x[1:n_reg]
-      covs  <- x[(n_reg + 1):length(x)]
+      betas <- x[1:n_reg] # The first parameters are always the regressions. Extract them.
+      covs  <- x[(n_reg + 1):length(x)] # The rest of the parameters are the covariances
+      g.covs  <- covs[1:(n_cov_exo*ngroups)] # Which ones are the group-specific? Use the number of (co)variances * ngroups 
+      gk.covs <- covs[!c(covs %in% g.covs)] # The rest are the group-cluster specific covariances
       
-      n_psi <- length(covs)
+      # How many?
+      n_g.psi <- length(g.covs) 
+      n_gk.psi <- length(gk.covs)
       
-      clus_idx <- n_reg/nclus
+      # Input the correct beta parameter in the matrix
+      clus_idx <- n_reg/nclus # How many regression per cluster?
       for(k in 1:nclus){
         beta_vec <- betas[(((k - 1)*clus_idx) + 1):(clus_idx*k)]
         beta_mat[[k]][idx.beta] <- beta_vec
       }
       
+      # Input the correct psi parameter in the matrix
       psi_gks <- psi_mat
-      clus_idx <- n_psi/(nclus*ngroups)
-      gk <- 0
+      g.clus_idx <- n_g.psi/(ngroups) # How many g.psi per group?
+      gk.clus_idx <- n_gk.psi/(nclus*ngroups) # How many gk.psi per group-cluster?
+      gk <- 0 # group-cluster counter
       for(k in 1:nclus){
         for(g in 1:ngroups){
           gk <- gk + 1
-          cov_vec <- covs[(((gk - 1)*clus_idx) + 1):(clus_idx*gk)]
-          psi_mat[[g, k]][idx.psi] <- cov_vec[idx.psi_vec]
+          cov_vec <- c(g.covs[(((g - 1)*g.clus_idx) + 1):(g.clus_idx*g)], gk.covs[(((gk - 1)*gk.clus_idx) + 1):(gk.clus_idx*gk)])
+          psi_mat[[g, k]][idx.psi] <- cov_vec[idx.psi_vec] # A part is group-specific and the other part is group-cluster-specific
         }
       }
       
       return(list(
-        betas_SE = beta_mat,
-        psi_SE   = psi_mat
+        betas_SE  = beta_mat,
+        psi_SE    = psi_mat,
+        SE_vector = x
       ))
     }
     
-    SE <- SE.S2(x        = vector_SE, 
-                beta_mat = beta_ks, 
-                psi_mat  = psi_gks,
-                cov_eta  = cov_eta,
-                nclus    = nclus,
-                ngroups = ngroups,
-                N_gs     = N_gs, 
-                idx.beta = idx.beta, 
-                idx.psi  = idx.psi, 
+    SE <- SE.S2(x         = vector_SE, 
+                beta_mat  = beta_ks, 
+                psi_mat   = psi_gks,
+                cov_eta   = cov_eta,
+                nclus     = nclus,
+                ngroups   = ngroups,
+                n_cov_exo = n_cov_exo,
+                N_gs      = N_gs, 
+                idx.beta  = idx.beta, 
+                idx.psi   = idx.psi, 
                 idx.psi_vec = idx.psi_vec)
   } else {
     SE <- NULL
