@@ -1348,6 +1348,6 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     NrPar         = list(Obs.nrpar = nr_pars, Fac.nrpar = nr_par_factors),
     N_gs          = N_gs,
     SE            = SE,
-    est.vec       = list(beta = beta_vec, psi = cov_vec)
+    est.vec       = if(isTRUE(do.se)) {list(beta = beta_vec, psi = cov_vec)} else {NULL}
   ))
 }
