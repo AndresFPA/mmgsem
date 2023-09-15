@@ -25,12 +25,12 @@ se <- function(object){
     lambda_vec <- c(lambda_vec, unlist(object$lambda[[g]])[non_zer.idx])
     lambda_nam <- c(lambda_nam, as.vector(outer(X = rownames(object$lambda[[g]]),
                                                 Y = colnames(object$lambda[[g]]),
-                                                function(x, y) paste0(y, "=~", x, ".", g)))[non_zer.idx])
+                                                function(x, y) paste0(y, "=~", x, ".g", g)))[non_zer.idx])
     
   }
   
   lambda_vec <- setNames(object = lambda_vec, nm = lambda_nam)
-  cons_vec <- lambda_vec[lambda_nam %in% paste0(constrained, ".1")] # only get the first group (given they are constrained)
+  cons_vec <- lambda_vec[lambda_nam %in% paste0(constrained, ".g1")] # only get the first group (given they are constrained)
   unco_vec <- lambda_vec[grepl(unconstrained, x = names(lambda_vec))]
   lambda_vec <- c(cons_vec, unco_vec)
   
@@ -44,7 +44,7 @@ se <- function(object){
     theta_vec <- c(theta_vec, unlist(object$theta[[g]])[non_zer.idx])
     theta_nam <- c(theta_nam, as.vector(outer(X = rownames(object$theta[[g]]),
                                               Y = colnames(object$theta[[g]]),
-                                              function(x, y) paste0(y, "~~", x, ".", g)))[non_zer.idx])
+                                              function(x, y) paste0(y, "~~", x, ".g", g)))[non_zer.idx])
     
   }
   
@@ -61,7 +61,7 @@ se <- function(object){
     beta_vec <- c(beta_vec, unlist(object$beta_ks[[k]])[non_zer.idx])
     beta_nam <- c(beta_nam, as.vector(outer(X = rownames(object$beta_ks[[k]]), 
                                             Y = colnames(object$beta_ks[[k]]), 
-                                            function(x, y) paste0(x, "~", y, ".", k)))[non_zer.idx])
+                                            function(x, y) paste0(x, "~", y, ".k", k)))[non_zer.idx])
   }
   
   beta_vec <- setNames(object = beta_vec, nm = beta_nam) # Name the vector (the .1 and .2 represent the cluster)
@@ -80,7 +80,7 @@ se <- function(object){
       cov_vec <- c(cov_vec, unlist(object$psi_gks[[g, k]])[non_zer.idx][unique.idx])
       cov_nam <- c(cov_nam, as.vector(outer(X = rownames(object$psi_gks[[g, k]]),
                                             Y = rownames(object$psi_gks[[g, k]]),
-                                            function(x, y) paste0(x, "~~", y, ".", g, ".", k)))[non_zer.idx][unique.idx])
+                                            function(x, y) paste0(x, "~~", y, ".g", g, ".k", k)))[non_zer.idx][unique.idx])
     }
   }
   
@@ -227,8 +227,32 @@ se <- function(object){
               idx.unco   = idx.unco, 
               idx.theta  = idx.theta, 
               vec_ind    = vec_ind)
+  browser()
+  # SE Correction ---
+  Sigma_1 <- vcov(object$MM) # Extract Sigma step 1 directly from lavaan
+  Sigma_1 <- Sigma_1[, !duplicated(colnames(Sigma_1))] # Lavaan returns the constrained parameters duplicated. Remove them
+  colnames(Sigma_1)[grepl(pattern = ".p", x = colnames(Sigma_1))] <- names(cons_vec) # Rename the constrained parameter names to the actual parameter
+  colnames(Sigma_1)[grep(pattern = ".g", x = colnames(Sigma_1), invert = T)] <- paste0(colnames(Sigma_1)[grep(pattern = ".g", x = colnames(Sigma_1), invert = T)], ".g1") # Add g1 to the first group
   
-  return(SE)
+  rownames(Sigma_1)[grepl(pattern = ".p", x = rownames(Sigma_1))] <- names(cons_vec) # Rename the constrained parameter names to the actual parameter
+  rownames(Sigma_1)[grep(pattern = ".g", x = rownames(Sigma_1), invert = T)] <- paste0(rownames(Sigma_1)[grep(pattern = ".g", x = rownames(Sigma_1), invert = T)], ".g1") # Add g1 to the first group
+  
+  Sigma_1 <- Sigma_1[c(names(cons_vec), names(unco_vec), names(theta_vec)),
+                     c(names(cons_vec), names(unco_vec), names(theta_vec))] # Re-order in the same way as the one used in the joint hessian
+  
+  # Get indices
+  step1.idx <- which(colnames(HESS) %in% c(names(lambda_vec), names(theta_vec)))
+  step2.idx <- which(colnames(HESS) %in% c(names(beta_vec), names(cov_vec)))
+  
+  # Get matrix divided
+  I_22 <- -HESS[step2.idx, step2.idx]
+  I_12 <- -HESS[step2.idx, step1.idx]
+  
+  Sigma_1 <- Sigma_1[step1.idx, step1.idx]
+  
+  Sigma_2_corrected <- "pending"
+  
+  return(list(SE = SE, HESS = HESS, beta_vec = beta_vec))
 }
 
 # Objective function for the Hessian ---------------------------------------------------------------
