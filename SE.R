@@ -144,7 +144,7 @@ se <- function(object){
                           vec_ind    = vec_ind)
   
   # (4) Organize the SE for each parameter
-  vector_SE <- setNames(diag(sqrt(ginv(-HESS, tol = 1e-04))), colnames(HESS)) # The SE comes from the inverse of the negative hessian
+  vector_SE <- setNames(diag(sqrt(ginv(-HESS, tol = 1e-06))), colnames(HESS)) # The SE comes from the inverse of the negative hessian
   
   SE.S2 <- function(x, lambda_mat, theta_mat, 
                     beta_mat, psi_mat, 
@@ -211,7 +211,7 @@ se <- function(object){
     ))
   }
   
-  SE <- SE.S2(x         = vector_SE, 
+  SE <- SE.S2(x          = vector_SE, 
               lambda_mat = object$lambda, 
               theta_mat  = object$theta, 
               beta_mat   = object$beta_ks, 
@@ -227,7 +227,7 @@ se <- function(object){
               idx.unco   = idx.unco, 
               idx.theta  = idx.theta, 
               vec_ind    = vec_ind)
-  browser()
+  
   # SE Correction ---
   Sigma_1 <- vcov(object$MM) # Extract Sigma step 1 directly from lavaan
   Sigma_1 <- Sigma_1[, !duplicated(colnames(Sigma_1))] # Lavaan returns the constrained parameters duplicated. Remove them
@@ -246,11 +246,17 @@ se <- function(object){
   
   # Get matrix divided
   I_22 <- -HESS[step2.idx, step2.idx]
-  I_12 <- -HESS[step2.idx, step1.idx]
+  I_21 <- -HESS[step2.idx, step1.idx]
   
-  Sigma_1 <- Sigma_1[step1.idx, step1.idx]
+  I_22.inv <- ginv(I_22, tol = 1e-06)
+  Sigma_1  <- Sigma_1[step1.idx, step1.idx]
+  # browser()
   
-  Sigma_2_corrected <- "pending"
+  # APPLY THE CORRECTION (note: for now, it is not changing too much the results)
+  Sigma_2_corrected <- diag(sqrt(I_22.inv + I_22.inv %*% I_21 %*% Sigma_1 %*% t(I_21) %*% I_22.inv))
+  
+  # Add the corrected values to the final results
+  SE$corrected <- setNames(object = Sigma_2_corrected, nm = colnames(HESS[step2.idx, step2.idx]))
   
   return(list(SE = SE, HESS = HESS, beta_vec = beta_vec))
 }
