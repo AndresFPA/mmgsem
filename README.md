@@ -3,9 +3,13 @@ R code for Mixture Multigroup SEM (MMG-SEM). MMG-SEM performs clustering of a SE
 
 # Functions
 MMG-SEM: Main function to perform the clustering based on the structural parameters.
+
 E_Step: Necessary function for MMG-SEM. It performs the E-step of the EM algorithm.
+
 ModelSelection: Wrapper function. It performs MMG-SEM as many times as the user requires with different numbers of clusters, returning model selection measures (i.e., BIC, AIC, Chull).
+
 CHull: Necessary function for the model selection function. It performs the Convex Hull scree-ratio test for model selection.
+
 SE: Wrapper function. It computes the standard errors of the resulting parameters of an MMG-SEM analysis.
 
 
