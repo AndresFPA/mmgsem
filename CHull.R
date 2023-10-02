@@ -57,6 +57,6 @@ CHull <- function(loglik, nrpar, nsclust){
     convexhull <- c(fitMat[1,1],convexhull,fitMat[nrows,1])
     nrhull <- length(convexhull)
   }
-  fitMat <- cbind(fitMat, screeratios)
+  fitMat <- cbind(fitMat, abs(screeratios))
   return(fitMat)
 }
