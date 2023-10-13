@@ -58,7 +58,7 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
                            group, clusters, seed = NULL, userStart = NULL, s1out = NULL,
                            max_it = 10000L, nstarts = 1L, printing = FALSE,
                            partition = "hard", NonInv = NULL, constraints = "loadings",
-                           Endo2Cov = TRUE, allG = TRUE, fit = "factors") {
+                           Endo2Cov = TRUE, allG = TRUE, fit = "factors", est_method = "local") {
   
   # Prepare objects to compare in model selection
   nmodels   <- length(clusters[1]:clusters[2])
@@ -81,27 +81,30 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
     # If the user provides output of the first step (s1out), use it for all models
     if(!is.null(s1out)){
       model_fit[[k]] <- MMGSEM(dat = dat, step1model = step1model, step2model = step2model, 
-                               group = group, nclus = nclus[k], seed = seed, userStart = userStart, 
+                               group = group, nclus = k, seed = seed, userStart = userStart, 
                                s1out = s1out, max_it = max_it, nstarts = nstarts, printing = printing, 
                                partition = partition, NonInv = NonInv, constraints = constraints, 
-                               Endo2Cov = Endo2Cov, allG = allG, fit = fit)
+                               Endo2Cov = Endo2Cov, allG = allG, fit = fit, est_method = est_method)
     } else if (is.null(s1out)){
+      # browser()
       if(k == clusters[1]){
         model_fit[[k]] <- MMGSEM(dat = dat, step1model = step1model, step2model = step2model, 
-                                 group = group, nclus = nclus[k], seed = seed, userStart = userStart, 
+                                 group = group, nclus = k, seed = seed, userStart = userStart, 
                                  s1out = NULL, max_it = max_it, nstarts = nstarts, printing = printing, 
                                  partition = partition, NonInv = NonInv, constraints = constraints, 
-                                 Endo2Cov = Endo2Cov, allG = allG, fit = fit)
+                                 Endo2Cov = Endo2Cov, allG = allG, fit = fit, est_method = est_method)
         
         # Save the covariance matrix of step 1, so we do not run it for all models (it is the same for all of them).
         s1output <- model_fit[[k]]$MM
       } else {
+        # browser()
         model_fit[[k]] <- MMGSEM(dat = dat, step1model = step1model, step2model = step2model, 
-                                 group = group, nclus = nclus[k], seed = seed, userStart = userStart, 
+                                 group = group, nclus = k, seed = seed, userStart = userStart, 
                                  s1out = s1output, max_it = max_it, nstarts = nstarts, printing = printing, 
                                  partition = partition, NonInv = NonInv, constraints = constraints, 
-                                 Endo2Cov = Endo2Cov, allG = allG, fit = fit)
+                                 Endo2Cov = Endo2Cov, allG = allG, fit = fit, est_method = est_method)
       }
+      print(paste("model", k, "finished"))
     }
     # Save the model selection criteria
     BIC_G[[k]]     <- model_fit[[k]]$BIC$observed$BIC_G
