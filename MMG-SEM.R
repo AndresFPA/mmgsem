@@ -871,13 +871,12 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     # The loop identifies the non-zero parameters (i.e., the free parameters) in the beta matrices
     # It also saves the number of the parameter using the col and row names of the beta matrices (e.g., F3 ~ F1)
     for(k in 1:nclus){
-      non_zer.idx <- which(unlist(beta_ks[[k]]) != 0)
-      beta_vec <- c(beta_vec, unlist(beta_ks[[k]])[non_zer.idx])
-      beta_nam <- c(beta_nam, as.vector(outer(X = rownames(beta_ks[[k]]), 
-                                              Y = colnames(beta_ks[[k]]), 
+      ifelse(test = (nclus == 1), yes = (beta <- beta_ks), no = (beta <- beta_ks[[k]]))
+      non_zer.idx <- which(unlist(beta) != 0)
+      beta_vec <- c(beta_vec, unlist(beta)[non_zer.idx])
+      beta_nam <- c(beta_nam, as.vector(outer(X = rownames(beta), 
+                                              Y = colnames(beta), 
                                               function(x, y) paste0(x, "~", y, ".k", k)))[non_zer.idx])
-      
-      
     }
     
     beta_vec <- setNames(object = beta_vec, nm = beta_nam) # Name the vector (the .1 and .2 represent the cluster)
@@ -1120,26 +1119,17 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     }
     
     # Extract matrices from final step 2 output
-    if (nclus == 1) {
-      EST_s2 <- lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
-      beta_gks <- EST_s2[["beta"]]
-      psi_gks_tmp <- EST_s2[["psi"]]
-      
-      # Select useful betas
-      k.idx <- (seq_len(nclus) - 1) * ngroups + 1L
-      beta_ks <- beta_gks[k.idx]
-    } else if (nclus != 1) {
-      EST_s2 <- lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
-      beta_gks <- lapply(EST_s2, "[[", "beta")
-      psi_gks_tmp <- lapply(EST_s2, "[[", "psi")
-      
-      # Select useful betas
-      k.idx <- (seq_len(nclus) - 1) * ngroups + 1L
-      beta_ks <- beta_gks[k.idx]
-    }
+    EST_s2 <- lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
+    beta_gks <- lapply(EST_s2, "[[", "beta")
+    psi_gks_tmp <- lapply(EST_s2, "[[", "psi")
+    
+    # Select useful betas
+    k.idx <- (seq_len(nclus) - 1) * ngroups + 1L
+    beta_ks <- beta_gks[k.idx]
     
     # Re-order betas
     if (nclus == 1) {
+      beta_ks <- beta_ks[[1]]
       beta_ks <- reorder(beta_ks)
     } else if (nclus != 1) {
       beta_ks <- lapply(1:nclus, function(x) {
@@ -1286,6 +1276,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     cov_eta       = cov_eta, # Factor covariance matrix from first step
     beta_ks       = beta_ks,
     loglikelihood = LL,
+    global_LL     = ifelse(test = est_method == "global", global_LL, NA),
     loglik_gkw    = loglik_gksw,
     runs_loglik   = loglik_nstarts,
     obs_loglik    = Obs.LL,

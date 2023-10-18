@@ -115,12 +115,15 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
     AIC_fac[[k]]   <- model_fit[[k]]$AIC$Factors
     LL[[k]]        <- model_fit[[k]]$obs_loglik
     LL_fac[[k]]    <- model_fit[[k]]$loglikelihood
-    nrpar[[k]]     <- model_fit[[k]]$NrPar$Fac.nrpar
-    nrpar_fac[[k]] <- model_fit[[k]]$NrPar$Obs.nrpar
+    nrpar[[k]]     <- model_fit[[k]]$NrPar$Obs.nrpar
+    nrpar_fac[[k]] <- model_fit[[k]]$NrPar$Fac.nrpar
   } # For loop ends here
   # Also do CHull
   Chull_res      <- CHull(loglik = unlist(LL), nrpar = unlist(nrpar), clusters)
   Chull_res_fac  <- CHull(loglik = unlist(LL_fac), nrpar = unlist(nrpar_fac), nsclust = clusters)
+  
+  # Do KIC
+  KIC <- (-2 * LL) + (3 * (nrpars + 1))
   
   # Chull function already returns a matrix with LL and nrpar. Use it as a base for the rest of the results
   # browser()
