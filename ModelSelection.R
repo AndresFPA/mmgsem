@@ -68,6 +68,8 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
   BIC_N     <- vector(mode = "list", length = nmodels)
   BIC_G_fac <- vector(mode = "list", length = nmodels)
   BIC_N_fac <- vector(mode = "list", length = nmodels)
+  KIC       <- vector(mode = "list", length = nmodels)
+  KIC_fac   <- vector(mode = "list", length = nmodels)
   AIC       <- vector(mode = "list", length = nmodels)
   AIC_fac   <- vector(mode = "list", length = nmodels)
   LL        <- vector(mode = "list", length = nmodels)
@@ -117,27 +119,29 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
     LL_fac[[k]]    <- model_fit[[k]]$loglikelihood
     nrpar[[k]]     <- model_fit[[k]]$NrPar$Obs.nrpar
     nrpar_fac[[k]] <- model_fit[[k]]$NrPar$Fac.nrpar
+    KIC[[k]]       <- (-2 * LL[[k]]) + (3 * (nrpar[[k]] + 1))
+    KIC_fac[[k]]   <- (-2 * LL_fac[[k]]) + (3 * (nrpar_fac[[k]] + 1))
+    
   } # For loop ends here
   # Also do CHull
   Chull_res      <- CHull(loglik = unlist(LL), nrpar = unlist(nrpar), clusters)
   Chull_res_fac  <- CHull(loglik = unlist(LL_fac), nrpar = unlist(nrpar_fac), nsclust = clusters)
-  
-  # Do KIC
-  KIC <- (-2 * LL) + (3 * (nrpars + 1))
   
   # Chull function already returns a matrix with LL and nrpar. Use it as a base for the rest of the results
   # browser()
   overview <- cbind(Chull_res, 
                     unlist(BIC_G), unlist(BIC_N),
                     unlist(AIC),
+                    unlist(KIC),
                     Chull_res_fac[, c(2:4)],
                     unlist(BIC_G_fac), unlist(BIC_N_fac),
-                    unlist(AIC_fac)
+                    unlist(AIC_fac),
+                    unlist(KIC_fac)
                     )
   
   colnames(overview) <- c("Clusters", 
-                          "LL", "nrpar", "Chull Scree", "BIC_G", "BIC_N", "AIC",
-                          "LL_fac", "nrpar_fac", "Chull Scree_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac")
+                          "LL", "nrpar", "Chull Scree", "BIC_G", "BIC_N", "AIC", "KIC",
+                          "LL_fac", "nrpar_fac", "Chull Scree_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac", "KIC_fac")
   
   return(list(Overview = overview, 
               Models   = model_fit))
