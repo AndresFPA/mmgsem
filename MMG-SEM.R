@@ -92,7 +92,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
                                   group = group.idx, reorder = FALSE,
                                   na.rm = FALSE
     ) / group.sizes
-    centered[, vars] <- dat[, vars] - group.means[group.idx, drop = FALSE]
+    centered[, vars] <- dat[, vars] - group.means[group.idx, , drop = FALSE]
   } 
   
   
