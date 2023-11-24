@@ -1240,12 +1240,39 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   BIC_N <- (-2 * LL) + (nr_par_factors * log(sum(N_gs)))
   BIC_G <- (-2 * LL) + (nr_par_factors * log(ngroups))
   
-  # Calculate AIC. 
+  # Calculate AIC (and AIC3). 
   # Observed
-  Obs.AIC <- (-2 * Obs.LL) + (nr_pars * 2)
+  Obs.AIC  <- (-2 * Obs.LL) + (nr_pars * 2)
+  Obs.AIC3 <- (-2 * Obs.LL) + (nr_pars * 3)
   
   # Factors
-  AIC <- (-2 * LL) + (nr_par_factors * 2)
+  AIC  <- (-2 * LL) + (nr_par_factors * 2)
+  AIC3 <- (-2 * LL) + (nr_par_factors * 3)
+  
+  # Calculate entropy and ICL
+  # Entropy
+  # Code from github user daob (Oberski, 2019): https://gist.github.com/daob/c2b6d83815ddd57cde3cebfdc2c267b3
+  # p is the prior or posterior probabilities
+  entropy <- function(p) {
+      p <- p[p > sqrt(.Machine$double.eps)] # since Lim_{p->0} p log(p) = 0
+      sum(-p * log(p))
+  }
+  # browser()
+  sum_entropy <- sum(apply(z_gks, 1, entropy)) # Total entropy
+  
+  # Entropy R2
+  entropy.R2 <- function(pi, post) { 
+      error_prior <- entropy(pi) # Class proportions
+      error_post <- mean(apply(post, 1, entropy))
+      R2_entropy <- (error_prior - error_post) / error_prior
+      R2_entropy
+  }
+  
+  R2_entropy <- entropy.R2(pi = pi_ks, post = z_gks)
+  # browser()
+  # ICL
+  ICL     <- BIC_G + sum_entropy
+  Obs.ICL <- Obs.BIC_G + sum_entropy
   
   # Re order matrices so that we get them in the following order:
   # (1) Exogenous latent variables
@@ -1267,27 +1294,22 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   names(beta_ks) <- paste("Cluster", seq_len(nclus))
 
   return(list(
-    z_gks         = z_gks,
-    final_fit     = s2out,
-    psi_gks       = psi_gks,
-    lambda        = lambda_gs, # Lambda is invariant across all groups
-    theta         = theta_gs,
+    posteriors    = z_gks,
+    final_fit     = s2out, # Final fit of step 2 (contains all group-cluster combinations)
     MM            = S1output, # Output of step 1 (measurement model)
-    cov_eta       = cov_eta, # Factor covariance matrix from first step
-    beta_ks       = beta_ks,
-    loglikelihood = LL,
-    global_LL     = ifelse(test = est_method == "global", global_LL, NA),
-    loglik_gkw    = loglik_gksw,
-    runs_loglik   = loglik_nstarts,
-    obs_loglik    = Obs.LL,
-    BIC = list(
-      observed = list(BIC_N = Obs.BIC_N, BIC_G = Obs.BIC_G),
-      Factors = list(BIC_N = BIC_N, BIC_G = BIC_G)
-    ),
-    AIC = list(
-      observed = Obs.AIC,
-      Factors = AIC
-    ),
+    param         = list(psi_gks = psi_gks, lambda = lambda_gs, # Lambda is invariant across all groups
+                         theta = theta_gs, beta_ks = beta_ks, cov_eta = cov_eta), # Factor covariance matrix from first step
+    logLik        = list(loglik        = LL, # Final logLik of the model (its meaning depends on arguments "fit" and "est_method")
+                         global_loglik = ifelse(test = est_method == "global", global_LL, NA), # Only valid if est_method = "global"
+                         loglik_gksw   = loglik_gksw, # Weighted logLik per group-cluster combinations
+                         runs_loglik   = loglik_nstarts, # loglik for each start
+                         obs_loglik    = Obs.LL), # Only useful if fit = "local"
+    model_sel     = list(BIC        = list(observed = list(BIC_N = Obs.BIC_N, BIC_G = Obs.BIC_G),
+                                           Factors = list(BIC_N = BIC_N, BIC_G = BIC_G)),
+                         AIC        = list(observed = Obs.AIC, Factors = AIC),
+                         AIC3       = list(observed = Obs.AIC3, Factors = AIC3),
+                         R2_entropy = R2_entropy,
+                         ICL        = list(observed = Obs.ICL, Factors = ICL)),
     sample.stats  = list(S = S_unbiased, n_cov_exo = n_cov_exo),
     NrPar         = list(Obs.nrpar = nr_pars, Fac.nrpar = nr_par_factors),
     N_gs          = N_gs

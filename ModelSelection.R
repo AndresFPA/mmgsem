@@ -68,10 +68,12 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
   BIC_N     <- vector(mode = "list", length = nmodels)
   BIC_G_fac <- vector(mode = "list", length = nmodels)
   BIC_N_fac <- vector(mode = "list", length = nmodels)
-  KIC       <- vector(mode = "list", length = nmodels)
-  KIC_fac   <- vector(mode = "list", length = nmodels)
+  AIC3      <- vector(mode = "list", length = nmodels)
+  AIC3_fac  <- vector(mode = "list", length = nmodels)
   AIC       <- vector(mode = "list", length = nmodels)
   AIC_fac   <- vector(mode = "list", length = nmodels)
+  ICL       <- vector(mode = "list", length = nmodels)
+  ICL_fac   <- vector(mode = "list", length = nmodels)
   LL        <- vector(mode = "list", length = nmodels)
   LL_fac    <- vector(mode = "list", length = nmodels)
   nrpar     <- vector(mode = "list", length = nmodels)
@@ -109,22 +111,25 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
       print(paste("model", k, "finished"))
     }
     # Save the model selection criteria
-    BIC_G[[k]]     <- model_fit[[k]]$BIC$observed$BIC_G
-    BIC_N[[k]]     <- model_fit[[k]]$BIC$observed$BIC_N
-    BIC_G_fac[[k]] <- model_fit[[k]]$BIC$Factors$BIC_G
-    BIC_N_fac[[k]] <- model_fit[[k]]$BIC$Factors$BIC_N
-    AIC[[k]]       <- model_fit[[k]]$AIC$observed
-    AIC_fac[[k]]   <- model_fit[[k]]$AIC$Factors
-    LL[[k]]        <- model_fit[[k]]$obs_loglik
-    LL_fac[[k]]    <- model_fit[[k]]$loglikelihood
+    BIC_G[[k]]     <- model_fit[[k]]$model_sel$BIC$observed$BIC_G
+    BIC_N[[k]]     <- model_fit[[k]]$model_sel$BIC$observed$BIC_N
+    BIC_G_fac[[k]] <- model_fit[[k]]$model_sel$BIC$Factors$BIC_G
+    BIC_N_fac[[k]] <- model_fit[[k]]$model_sel$BIC$Factors$BIC_N
+    AIC[[k]]       <- model_fit[[k]]$model_sel$AIC$observed
+    AIC_fac[[k]]   <- model_fit[[k]]$model_sel$AIC$Factors
+    AIC3[[k]]      <- model_fit[[k]]$model_sel$AIC3$observed
+    AIC3_fac[[k]]  <- model_fit[[k]]$model_sel$AIC3$Factors
+    ICL[[k]]       <- model_fit[[k]]$model_sel$ICL$observed
+    ICL_fac[[k]]   <- model_fit[[k]]$model_sel$ICL$Factors
+    LL[[k]]        <- model_fit[[k]]$logLik$obs_loglik
+    LL_fac[[k]]    <- model_fit[[k]]$logLik$loglik
     nrpar[[k]]     <- model_fit[[k]]$NrPar$Obs.nrpar
     nrpar_fac[[k]] <- model_fit[[k]]$NrPar$Fac.nrpar
-    KIC[[k]]       <- (-2 * LL[[k]]) + (3 * (nrpar[[k]] + 1))
-    KIC_fac[[k]]   <- (-2 * LL_fac[[k]]) + (3 * (nrpar_fac[[k]] + 1))
     
   } # For loop ends here
+
   # Also do CHull
-  Chull_res      <- CHull(loglik = unlist(LL), nrpar = unlist(nrpar), clusters)
+  Chull_res      <- CHull(loglik = unlist(LL), nrpar = unlist(nrpar), nsclust = clusters)
   Chull_res_fac  <- CHull(loglik = unlist(LL_fac), nrpar = unlist(nrpar_fac), nsclust = clusters)
   
   # Chull function already returns a matrix with LL and nrpar. Use it as a base for the rest of the results
@@ -132,25 +137,114 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
   overview <- cbind(Chull_res, 
                     unlist(BIC_G), unlist(BIC_N),
                     unlist(AIC),
-                    unlist(KIC),
+                    unlist(AIC3),
+                    unlist(ICL),
                     Chull_res_fac[, c(2:4)],
                     unlist(BIC_G_fac), unlist(BIC_N_fac),
                     unlist(AIC_fac),
-                    unlist(KIC_fac)
+                    unlist(AIC3_fac),
+                    unlist(ICL_fac)
                     )
   
   colnames(overview) <- c("Clusters", 
-                          "LL", "nrpar", "Chull Scree", "BIC_G", "BIC_N", "AIC", "KIC",
-                          "LL_fac", "nrpar_fac", "Chull Scree_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac", "KIC_fac")
+                          "LL", "nrpar", "Chull Scree", "BIC_G", "BIC_N", "AIC", "AIC3", "ICL",
+                          "LL_fac", "nrpar_fac", "Chull Scree_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac", "AIC3_fac", "ICL_fac")
+  
+  overview <- as.data.frame(overview)
   
   return(list(Overview = overview, 
-              Models   = model_fit))
+              Models   = model_fit)
+         )
 }
 
 
+CHull <- function(loglik, nrpar, nsclust){
+    # browser()
+    Clus <- seq(nsclust[1], nsclust[2])
+    fitMat <- matrix(data = c(Clus, loglik, nrpar), ncol = 3)
+    k <- nrow(fitMat)
+    
+    screeratios <- matrix(NA, nsclust[2] - nsclust[1] + 1, 1)
+    CHullcheck <- 0
+    for(nclust in (nsclust[1] + 1):(nsclust[2] - 1)){
+        LL_nclust <- fitMat[nclust-nsclust[1]+1, 2]
+        npar_nclust <- fitMat[nclust-nsclust[1]+1, 3]
+        LL_nclustmin1 <- fitMat[nclust-nsclust[1], 2]
+        npar_nclustmin1 <- fitMat[nclust-nsclust[1], 3]
+        LL_nclustplus1 <- fitMat[nclust-nsclust[1]+2, 2]
+        npar_nclustplus1 <- fitMat[nclust-nsclust[1]+2, 3]
+        # determine whether intermediate point is part of the convex hull
+        slope <- (LL_nclustplus1-LL_nclustmin1)/(npar_nclustplus1-npar_nclustmin1)
+        point_line <- LL_nclustmin1+slope*(npar_nclust-npar_nclustmin1)
+        #diff_fit=(LL_nclust-LL_nclustmin1)/abs(LL_nclust)
+        if(isTRUE(LL_nclust>=(point_line-.01))){ # && diff_fit>.0001)
+            screeratios[nclust - nsclust[1] + 1] <- ((LL_nclust-LL_nclustmin1)/(npar_nclust-npar_nclustmin1))/((LL_nclustplus1-LL_nclust)/(npar_nclustplus1-npar_nclust))
+        }
+    }
+    #screeratios[CHullcheck<0]=NA
+    convexhull <- which(!is.na(screeratios))
+    nrows <- nrow(fitMat)
+    convexhull <- c(fitMat[1,1],convexhull,fitMat[nrows,1])
+    nrhull <- length(convexhull)
+    change <- 0
+    if(nrhull < nrows){
+        change <- 1
+    }
+    while(nrhull > 2 && change == 1){ # check again whether intermediate points are on the convex hull
+        nsclusthull <- fitMat[convexhull, 1]
+        change <- 0
+        for(nclust in 2:(nrhull - 1)){
+            if(!identical(convexhull[(nclust-1):(nclust+1)],c(convexhull[nclust]-1,convexhull[nclust],convexhull[nclust]+1))){
+                LL_nclust <- fitMat[convexhull[nclust]-nsclust[1]+1,2]
+                npar_nclust <- fitMat[convexhull[nclust]-nsclust[1]+1,3]
+                LL_nclustmin1 <- fitMat[convexhull[nclust-1]-nsclust[1]+1,2]
+                npar_nclustmin1 <- fitMat[convexhull[nclust-1]-nsclust[1]+1,3]
+                LL_nclustplus1 <- fitMat[convexhull[nclust+1]-nsclust[1]+1,2]
+                npar_nclustplus1 <- fitMat[convexhull[nclust+1]-nsclust[1]+1,3]
+                # determine whether intermediate point is part of the convex hull
+                slope <- (LL_nclustplus1-LL_nclustmin1)/(npar_nclustplus1-npar_nclustmin1)
+                point_line <- LL_nclustmin1+slope*(npar_nclust-npar_nclustmin1)
+                if(LL_nclust>=(point_line-.01)){
+                    # when the subset of three points spans across a point not on the hull, this is the corrected scree ratio (comparing with the previous and next point ON THE HULL)
+                    screeratios[convexhull[nclust]-nsclust[1]+1]=((LL_nclust-LL_nclustmin1)/(npar_nclust-npar_nclustmin1))/((LL_nclustplus1-LL_nclust)/(npar_nclustplus1-npar_nclust))
+                } else {
+                    screeratios[convexhull[nclust]-nsclust[1]+1]=NA
+                    change=1
+                }
+            }
+        }
+        convexhull <- which(!is.na(screeratios))
+        convexhull <- c(fitMat[1,1],convexhull,fitMat[nrows,1])
+        nrhull <- length(convexhull)
+    }
+    fitMat <- cbind(fitMat, abs(screeratios))
+    return(fitMat)
+}
 
-
-
+plot.MMGSEM <- function(ModelSel){
+    overview <- ModelSel$Overview
+    
+    # Plots for visual inspection
+    plot.BIC_G     <- ggplot(data = overview, mapping = aes(x = Clusters, y = BIC_G))     + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$BIC_G); lines(x = overview$Clusters, y = overview$BIC_G)
+    plot.BIC_N     <- ggplot(data = overview, mapping = aes(x = Clusters, y = BIC_N))     + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$BIC_N); lines(x = overview$Clusters, y = overview$BIC_N)
+    plot.BIC_G_fac <- ggplot(data = overview, mapping = aes(x = Clusters, y = BIC_G_fac)) + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$BIC_G_fac); lines(x = overview$Clusters, y = overview$BIC_G_fac)
+    plot.BIC_N_fac <- ggplot(data = overview, mapping = aes(x = Clusters, y = BIC_N_fac)) + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$BIC_N_fac); lines(x = overview$Clusters, y = overview$BIC_N_fac)
+    plot.AIC       <- ggplot(data = overview, mapping = aes(x = Clusters, y = AIC))       + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$AIC); lines(x = overview$Clusters, y = overview$AIC)
+    plot.AIC_fac   <- ggplot(data = overview, mapping = aes(x = Clusters, y = AIC_fac))   + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$AIC_fac); lines(x = overview$Clusters, y = overview$AIC_fac)
+    plot.AIC3      <- ggplot(data = overview, mapping = aes(x = Clusters, y = AIC3))      + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$AIC3); lines(x = overview$Clusters, y = overview$AIC3)
+    plot.AIC3_fac  <- ggplot(data = overview, mapping = aes(x = Clusters, y = AIC3_fac))  + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$AIC3_fac); lines(x = overview$Clusters, y = overview$AIC3_fac)
+    plot.ICL       <- ggplot(data = overview, mapping = aes(x = Clusters, y = ICL))       + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$ICL); lines(x = overview$Clusters, y = overview$ICL)
+    plot.ICL_fac   <- ggplot(data = overview, mapping = aes(x = Clusters, y = ICL_fac))   + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$ICL_fac); lines(x = overview$Clusters, y = overview$ICL_fac)
+    plot.Chull     <- ggplot(data = overview, mapping = aes(x = Clusters, y = LL))        + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$LL); lines(x = overview$Clusters, y = overview$LL)
+    plot.Chull_fac <- ggplot(data = overview, mapping = aes(x = Clusters, y = LL_fac))    + geom_point() + geom_line() # plot(x = overview$Clusters, y = overview$LL_fac); lines(x = overview$Clusters, y = overview$LL_fac)
+    
+    plots <- list(BIC_G = plot.BIC_G, BIC_N = plot.BIC_N, BIC_G_fac = plot.BIC_G_fac,
+                  BIC_N_fac = plot.BIC_N_fac, AIC = plot.AIC, AIC_fac = plot.AIC_fac, AIC3 = plot.AIC3, 
+                  AIC3_fac = plot.AIC3_fac, ICL = plot.ICL, ICL_fac = plot.ICL_fac, 
+                  Chull = plot.Chull, Chull_fac = plot.Chull_fac)
+    
+    return(plots)
+}
 
 
 
