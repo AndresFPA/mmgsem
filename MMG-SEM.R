@@ -1271,8 +1271,8 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   R2_entropy <- entropy.R2(pi = pi_ks, post = z_gks)
   # browser()
   # ICL
-  ICL     <- BIC_G + sum_entropy
-  Obs.ICL <- Obs.BIC_G + sum_entropy
+  ICL     <- BIC_G + (sum_entropy * 2)
+  Obs.ICL <- Obs.BIC_G + (sum_entropy * 2)
   
   # Re order matrices so that we get them in the following order:
   # (1) Exogenous latent variables

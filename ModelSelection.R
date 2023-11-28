@@ -78,6 +78,7 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
   LL_fac    <- vector(mode = "list", length = nmodels)
   nrpar     <- vector(mode = "list", length = nmodels)
   nrpar_fac <- vector(mode = "list", length = nmodels)
+  R2entropy <- vector(mode = "list", length = nmodels)
   
   
   # Call MMGSEM using the arguments provided by the user k times (one per required model)
@@ -121,6 +122,7 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
     AIC3_fac[[k]]  <- model_fit[[k]]$model_sel$AIC3$Factors
     ICL[[k]]       <- model_fit[[k]]$model_sel$ICL$observed
     ICL_fac[[k]]   <- model_fit[[k]]$model_sel$ICL$Factors
+    R2entropy[[k]] <- model_fit[[k]]$model_sel$R2_entropy
     LL[[k]]        <- model_fit[[k]]$logLik$obs_loglik
     LL_fac[[k]]    <- model_fit[[k]]$logLik$loglik
     nrpar[[k]]     <- model_fit[[k]]$NrPar$Obs.nrpar
@@ -134,7 +136,8 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
   
   # Chull function already returns a matrix with LL and nrpar. Use it as a base for the rest of the results
   # browser()
-  overview <- cbind(Chull_res, 
+  overview <- cbind(unlist(R2entropy),
+                    Chull_res, 
                     unlist(BIC_G), unlist(BIC_N),
                     unlist(AIC),
                     unlist(AIC3),
@@ -146,9 +149,9 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
                     unlist(ICL_fac)
                     )
   
-  colnames(overview) <- c("Clusters", 
-                          "LL", "nrpar", "Chull Scree", "BIC_G", "BIC_N", "AIC", "AIC3", "ICL",
-                          "LL_fac", "nrpar_fac", "Chull Scree_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac", "AIC3_fac", "ICL_fac")
+  colnames(overview) <- c("R2entropy", "Clusters",
+                          "LL", "nrpar", "Chull", "BIC_G", "BIC_N", "AIC", "AIC3", "ICL",
+                          "LL_fac", "nrpar_fac", "Chull_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac", "AIC3_fac", "ICL_fac")
   
   overview <- as.data.frame(overview)
   
