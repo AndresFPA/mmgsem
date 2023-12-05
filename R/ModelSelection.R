@@ -52,8 +52,7 @@
 #'                     fit is "factors".
 #'
 #' PLEASE NOTE: This function requires 'lavaan' package to work. It also requires the function 'EStep.R'.
-#'
-
+#' @export
 ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
                            group, clusters, seed = NULL, userStart = NULL, s1out = NULL,
                            max_it = 10000L, nstarts = 1L, printing = FALSE,
@@ -224,6 +223,7 @@ CHull <- function(loglik, nrpar, nsclust){
     return(fitMat)
 }
 
+#' @export
 plot.MMGSEM <- function(ModelSel){
     overview <- ModelSel$Overview
     
