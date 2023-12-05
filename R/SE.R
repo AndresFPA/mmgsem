@@ -13,8 +13,8 @@
 #' @export
 se <- function(object){
   # Prepare some objects
-  ngroups <- nrow(object$z_gks)
-  nclus   <- ncol(object$z_gks)
+  ngroups <- nrow(object$posteriors)
+  nclus   <- ncol(object$posteriors)
   
   # Calculate the Standard Errors of the structural parameters
   # To calculate the SE, we use the Hessian (second derivative) of the structural parameters.
@@ -34,10 +34,10 @@ se <- function(object){
   
   # Start with the lambdas
   for (g in 1:ngroups) {
-    non_zer.idx <- which(unlist(object$lambda[[g]]) != 0 & unlist(object$lambda[[g]]) != 1)
-    lambda_vec <- c(lambda_vec, unlist(object$lambda[[g]])[non_zer.idx])
-    lambda_nam <- c(lambda_nam, as.vector(outer(X = rownames(object$lambda[[g]]),
-                                                Y = colnames(object$lambda[[g]]),
+    non_zer.idx <- which(unlist(object$param$lambda[[g]]) != 0 & unlist(object$lambda[[g]]) != 1)
+    lambda_vec <- c(lambda_vec, unlist(object$param$lambda[[g]])[non_zer.idx])
+    lambda_nam <- c(lambda_nam, as.vector(outer(X = rownames(object$param$lambda[[g]]),
+                                                Y = colnames(object$param$lambda[[g]]),
                                                 function(x, y) paste0(y, "=~", x, ".g", g)))[non_zer.idx])
     
   }
@@ -53,10 +53,10 @@ se <- function(object){
   
   # Start with the lambdas
   for (g in 1:ngroups) {
-    non_zer.idx <- which(unlist(object$theta[[g]]) != 0)
-    theta_vec <- c(theta_vec, unlist(object$theta[[g]])[non_zer.idx])
-    theta_nam <- c(theta_nam, as.vector(outer(X = rownames(object$theta[[g]]),
-                                              Y = colnames(object$theta[[g]]),
+    non_zer.idx <- which(unlist(object$param$theta[[g]]) != 0)
+    theta_vec <- c(theta_vec, unlist(object$param$theta[[g]])[non_zer.idx])
+    theta_nam <- c(theta_nam, as.vector(outer(X = rownames(object$param$theta[[g]]),
+                                              Y = colnames(object$param$theta[[g]]),
                                               function(x, y) paste0(y, "~~", x, ".g", g)))[non_zer.idx])
     
   }
@@ -70,10 +70,10 @@ se <- function(object){
   # The loop identifies the non-zero parameters (i.e., the free parameters) in the beta matrices
   # It also saves the number of the parameter using the col and row names of the beta matrices (e.g., F3 ~ F1)
   for(k in 1:nclus){
-    non_zer.idx <- which(unlist(object$beta_ks[[k]]) != 0)
-    beta_vec <- c(beta_vec, unlist(object$beta_ks[[k]])[non_zer.idx])
-    beta_nam <- c(beta_nam, as.vector(outer(X = rownames(object$beta_ks[[k]]), 
-                                            Y = colnames(object$beta_ks[[k]]), 
+    non_zer.idx <- which(unlist(object$param$beta_ks[[k]]) != 0)
+    beta_vec <- c(beta_vec, unlist(object$param$beta_ks[[k]])[non_zer.idx])
+    beta_nam <- c(beta_nam, as.vector(outer(X = rownames(object$param$beta_ks[[k]]), 
+                                            Y = colnames(object$param$beta_ks[[k]]), 
                                             function(x, y) paste0(x, "~", y, ".k", k)))[non_zer.idx])
   }
   
@@ -88,11 +88,11 @@ se <- function(object){
   # However, even if repeated, it is only one parameter. The unique.idx removes the repeated parameter.
   for(k in 1:nclus){
     for(g in 1:ngroups){
-      non_zer.idx <- which(unlist(object$psi_gks[[g, k]]) != 0)
-      unique.idx  <- !duplicated(unlist(object$psi_gks[[g, k]])[non_zer.idx])
-      cov_vec <- c(cov_vec, unlist(object$psi_gks[[g, k]])[non_zer.idx][unique.idx])
-      cov_nam <- c(cov_nam, as.vector(outer(X = rownames(object$psi_gks[[g, k]]),
-                                            Y = rownames(object$psi_gks[[g, k]]),
+      non_zer.idx <- which(unlist(object$param$psi_gks[[g, k]]) != 0)
+      unique.idx  <- !duplicated(unlist(object$param$psi_gks[[g, k]])[non_zer.idx])
+      cov_vec <- c(cov_vec, unlist(object$param$psi_gks[[g, k]])[non_zer.idx][unique.idx])
+      cov_nam <- c(cov_nam, as.vector(outer(X = rownames(object$param$psi_gks[[g, k]]),
+                                            Y = rownames(object$param$psi_gks[[g, k]]),
                                             function(x, y) paste0(x, "~~", y, ".g", g, ".k", k)))[non_zer.idx][unique.idx])
     }
   }
@@ -140,11 +140,11 @@ se <- function(object){
   HESS <- compute_hessian(f         = obj.S2,
                           x         = x, 
                           d         = 1e-05, 
-                          lambda_mat = object$lambda, 
-                          theta_mat  = object$theta, 
-                          beta_mat   = object$beta_ks, 
-                          psi_mat    = object$psi_gks, 
-                          pi_ks      = colMeans(object$z_gks), 
+                          lambda_mat = object$param$lambda, 
+                          theta_mat  = object$param$theta, 
+                          beta_mat   = object$param$beta_ks, 
+                          psi_mat    = object$param$psi_gks, 
+                          pi_ks      = colMeans(object$posteriors), 
                           S          = object$sample.stats$S,
                           nclus      = k, ngroups = g, n_cov_exo = object$sample.stats$n_cov_exo,
                           N_gs       = object$N_gs, 
@@ -225,11 +225,11 @@ se <- function(object){
   }
   
   SE <- SE.S2(x          = vector_SE, 
-              lambda_mat = object$lambda, 
-              theta_mat  = object$theta, 
-              beta_mat   = object$beta_ks, 
-              psi_mat    = object$psi_gks, 
-              pi_ks      = colMeans(object$z_gks), 
+              lambda_mat = object$param$lambda, 
+              theta_mat  = object$param$theta, 
+              beta_mat   = object$param$beta_ks, 
+              psi_mat    = object$param$psi_gks, 
+              pi_ks      = colMeans(object$posteriors), 
               S          = object$sample.stats$S,
               nclus      = k, ngroups = g, n_cov_exo = object$sample.stats$n_cov_exo,
               N_gs       = object$N_gs, 

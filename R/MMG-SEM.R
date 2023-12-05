@@ -1060,7 +1060,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         # fake_global$ustart <- NA
         s2out <- lavaan::sem(
           model = fake_global, sample.cov = rep(S_biased, nclus), sample.nobs = N_gks,
-          baseline = FALSE, se = "none",
+          baseline = FALSE,
           h1 = FALSE, check.post = FALSE,
           control = list(rel.tol = 1e-06), start = start,
           sample.cov.rescale = FALSE,
