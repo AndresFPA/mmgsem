@@ -1,0 +1,12 @@
+Package: mmgsem
+Title: Mixture Multigroup Structural Equation Modeling (MMG-SEM)
+Version: 0.0.1
+Authors@R: 
+    person("Andres Felipe", "Perez Alonso", , "a.f.perezalonso@tilburguniversity.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-2480-8771"))
+Description: Package for finding clusters of groups that share similar relations between latent variables (i.e., regression parameters) through the use of MMG-SEM.
+License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
+    license
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
