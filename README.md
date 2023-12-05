@@ -3,7 +3,7 @@ R code for Mixture Multigroup SEM (MMG-SEM). MMG-SEM performs clustering of a SE
 
 # Installation
 It is possible to download the (in development) mmgsem package from GitHub by:
-```
+```R
 library("devtools")
 devtools::install_github("AndresFPA/mmgsem")
 ```
