@@ -70,10 +70,10 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
   
   # Get several values relevant for future steps
-  g_name <- as.character(unique(dat[, group]))
-  vars <- lavNames(lavaanify(step1model, auto = TRUE))
-  lat_var <- lavNames(lavaanify(step1model, auto = TRUE), "lv")
-  n_var <- length(vars)
+  g_name  <- as.character(unique(dat[, group]))
+  vars    <- lavaan::lavNames(lavaanify(step1model, auto = TRUE))
+  lat_var <- lavaan::lavNames(lavaanify(step1model, auto = TRUE), "lv")
+  n_var   <- length(vars)
 
   # # Center the data per group (so that the mean for all variables in each group is 0)
   centered <- dat
@@ -134,29 +134,29 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     # Extract Lambda & Theta for each group in all blocks
     # Initialize lists to store lambdas and thetas per block
     lambda_block <- vector(mode = "list", length = M)
-    theta_block <- vector(mode = "list", length = M)
+    theta_block  <- vector(mode = "list", length = M)
     for (m in 1:M) {
-      EST_block <- lavInspect(S1output[[m]], "est")
+      EST_block         <- lavaan::lavInspect(S1output[[m]], "est")
       lambda_block[[m]] <- lapply(X = EST_block, "[[", "lambda")
-      theta_block[[m]] <- lapply(X = EST_block, "[[", "theta")
+      theta_block[[m]]  <- lapply(X = EST_block, "[[", "theta")
     }
 
     # Put together lambda & theta for all groups
     # We should end with one lambda and theta matrix per group
     lambda_group <- vector(mode = "list", length = ngroups)
-    theta_group <- vector(mode = "list", length = ngroups)
+    theta_group  <- vector(mode = "list", length = ngroups)
     for (g in 1:ngroups) {
       for (m in 1:M) { # Put matrices of the same group in the same list
         lambda_group[[g]][[m]] <- lambda_block[[m]][[g]]
-        theta_group[[g]][[m]] <- theta_block[[m]][[g]]
+        theta_group[[g]][[m]]  <- theta_block[[m]][[g]]
       }
       
       # Put together the matrices per group
       # Lambda
-      lambda_group[[g]] <- lav_matrix_bdiag(lambda_group[[g]])
+      lambda_group[[g]] <- lavaan::lav_matrix_bdiag(lambda_group[[g]])
 
       # Theta
-      theta_group[[g]] <- lav_matrix_bdiag(theta_group[[g]])
+      theta_group[[g]]  <- lavaan::lav_matrix_bdiag(theta_group[[g]])
 
       # Label correctly the rows and columns of the resulting matrices
       # Lambda
@@ -169,17 +169,17 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
     # Change names and get matrices/values relevant for future steps
     lambda_gs <- lambda_group
-    theta_gs <- theta_group
-    N_gs <- lavInspect(S1output[[1]], "nobs") # nobs per group
+    theta_gs  <- theta_group
+    N_gs      <- lavaan::lavInspect(S1output[[1]], "nobs") # nobs per group
 
     # Estimate cov_eta (Covariance between the factors)
-    M_mat <- vector(mode = "list", length = ngroups) # M matrices from SAM
+    M_mat   <- vector(mode = "list", length = ngroups) # M matrices from SAM
     cov_eta <- vector(mode = "list", length = ngroups)
 
     for (g in 1:ngroups) {
       # Compute the M (mapping) matrix in case we have different blocks
       lambda_g <- lambda_gs[[g]]
-      theta_g <- theta_gs[[g]]
+      theta_g  <- theta_gs[[g]]
       M_mat[[g]] <- solve(t(lambda_g) %*% solve(theta_g) %*% lambda_g) %*% t(lambda_g) %*% solve(theta_g)
 
       # Get the covariance of the factors (cov_eta)
@@ -204,18 +204,18 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
     # Define some important objects
     # How many groups?
-    ngroups <- lavInspect(S1output, "ngroups")
-    N_gs <- lavInspect(S1output, "nobs") # nobs per group
+    ngroups <- lavaan::lavInspect(S1output, "ngroups")
+    N_gs    <- lavaan::lavInspect(S1output, "nobs") # nobs per group
 
     # all estimated model matrices, per group
-    EST <- lavInspect(S1output, "est", add.class = FALSE, add.labels = TRUE)
-    theta_gs <- lapply(EST, "[[", "theta")
+    EST       <- lavaan::lavInspect(S1output, "est", add.class = FALSE, add.labels = TRUE)
+    theta_gs  <- lapply(EST, "[[", "theta")
     lambda_gs <- lapply(EST, "[[", "lambda")
-    cov_eta <- lapply(EST, "[[", "psi") # cov_eta name refers to Variance of eta (eta being the latent variables)
+    cov_eta   <- lapply(EST, "[[", "psi") # cov_eta name refers to Variance of eta (eta being the latent variables)
   }
 
   # Which are our latent variables?
-  lat_var <- lavNames(lavaanify(step1model, auto = TRUE), "lv")
+  lat_var <- lavaan::lavNames(lavaan::lavaanify(step1model, auto = TRUE), "lv")
   gro_clu <- ngroups * nclus
   
   # Biased cov matrix
@@ -287,7 +287,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
   # Do a fake sem() to obtain the correct settings to use in Step 2
   # just a single sample cov!
-  fake <- sem(
+  fake <- lavaan::sem(
     model = step2model, sample.cov = rep(cov_eta[1], nclus),
     sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
     baseline = FALSE,
@@ -344,7 +344,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     prTbl_lv[[lv]]  <- FakeprTbl[prTbl_idx, ]
 
     # Run the model per endo latent variable
-    fake_lv[[lv]] <- sem(
+    fake_lv[[lv]] <- lavaan::sem(
       model = prTbl_lv[[lv]], sample.cov = rep(cov_eta[1], nclus),
       sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
       baseline = FALSE,
@@ -486,7 +486,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
       if (isFALSE(allG) | i == 1) {
         # Do this when allG is False OR when it is True and we are in the first iteration
         # For the first iteration, perform the full structural model estimation
-        s2out <- lavaan(
+        s2out <- lavaan::lavaan(
           slotOptions       = fake@Options,
           slotParTable      = fake@ParTable,
           sample.cov        = COV,
@@ -517,7 +517,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
       # compute loglikelihood for all group/cluster combinations
       # Initialize matrices to store loglikelihoods
-      loglik_gks <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+      loglik_gks  <- matrix(data = 0, nrow = ngroups, ncol = nclus)
       loglik_gksw <- matrix(data = 0, nrow = ngroups, ncol = nclus)
       gk <- 0
 
@@ -531,13 +531,13 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         # Do this when allG is False OR when it is True and we are in the first iteration
         # In iteration one, there is only model (s2out) from which we extract the parameters.
         if (nclus == 1) {
-          EST_s2 <- lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
+          EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
           beta_ks <- EST_s2[["beta"]]
-          psi_ks <- EST_s2[["psi"]]
+          psi_ks  <- EST_s2[["psi"]]
         } else if (nclus != 1) {
-          EST_s2 <- lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
+          EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
           beta_ks <- lapply(EST_s2, "[[", "beta") # Does not work with only one cluster
-          psi_ks <- lapply(EST_s2, "[[", "psi")
+          psi_ks  <- lapply(EST_s2, "[[", "psi")
         }
 
         # Re order for correct comparisons
@@ -556,18 +556,18 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         # After iteration 1 we have several models (s2out[[lv]]) from which we extract the parameters
         # Extract the beta matrices per model (one per endo LV)
         # Initialize lists to store the parameters
-        EST_s2_lv <- vector(mode = "list", length = length(endog))
+        EST_s2_lv  <- vector(mode = "list", length = length(endog))
         beta_ks_lv <- vector(mode = "list", length = length(endog))
-        psi_ks_lv <- vector(mode = "list", length = length(endog))
+        psi_ks_lv  <- vector(mode = "list", length = length(endog))
         for (lv in 1:length(endog)) {
           if (nclus == 1) {
-            EST_s2_lv[[lv]] <- lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
+            EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
             beta_ks_lv[[lv]] <- EST_s2_lv[[lv]][["beta"]]
-            psi_ks_lv[[lv]] <- EST_s2_lv[[lv]][["psi"]]
+            psi_ks_lv[[lv]]  <- EST_s2_lv[[lv]][["psi"]]
           } else if (nclus != 1) {
-            EST_s2_lv[[lv]] <- lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
+            EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
             beta_ks_lv[[lv]] <- lapply(EST_s2_lv[[lv]], "[[", "beta") # Does not work with only one cluster
-            psi_ks_lv[[lv]] <- lapply(EST_s2_lv[[lv]], "[[", "psi")
+            psi_ks_lv[[lv]]  <- lapply(EST_s2_lv[[lv]], "[[", "psi")
           }
         }
 
@@ -719,21 +719,21 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
 
   # Get best fit and z_gks based on the loglikelihood
   best_idx <- which.max(loglik_nstarts)
-  s2out <- results_nstarts[[best_idx]]
-  LL <- loglik_nstarts[best_idx]
-  z_gks <- z_gks_nstarts[[best_idx]]
+  s2out    <- results_nstarts[[best_idx]]
+  LL       <- loglik_nstarts[best_idx]
+  z_gks    <- z_gks_nstarts[[best_idx]]
   colnames(z_gks) <- paste("Cluster", seq_len(nclus))
 
   # Extract matrices from final step 2 output
   if (isFALSE(allG)) {
     if (nclus == 1) {
-      EST_s2 <- lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
+      EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
       beta_ks <- EST_s2[["beta"]]
-      psi_ks <- EST_s2[["psi"]]
+      psi_ks  <- EST_s2[["psi"]]
     } else if (nclus != 1) {
-      EST_s2 <- lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
+      EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
       beta_ks <- lapply(EST_s2, "[[", "beta")
-      psi_ks <- lapply(EST_s2, "[[", "psi")
+      psi_ks  <- lapply(EST_s2, "[[", "psi")
     }
   } else if (isTRUE(allG)) {
     EST_s2_lv <- vector(mode = "list", length = length(endog))
@@ -741,13 +741,13 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     psi_ks_lv <- vector(mode = "list", length = length(endog))
     for (lv in 1:length(endog)) {
       if (nclus == 1) {
-        EST_s2_lv[[lv]] <- lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
+        EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
         beta_ks_lv[[lv]] <- EST_s2_lv[[lv]][["beta"]]
-        psi_ks_lv[[lv]] <- EST_s2_lv[[lv]][["psi"]]
+        psi_ks_lv[[lv]]  <- EST_s2_lv[[lv]][["psi"]]
       } else if (nclus != 1) {
-        EST_s2_lv[[lv]] <- lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
+        EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
         beta_ks_lv[[lv]] <- lapply(EST_s2_lv[[lv]], "[[", "beta") # Does not work with only one cluster
-        psi_ks_lv[[lv]] <- lapply(EST_s2_lv[[lv]], "[[", "psi")
+        psi_ks_lv[[lv]]  <- lapply(EST_s2_lv[[lv]], "[[", "psi")
       }
     }
 
@@ -818,12 +818,12 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     # Create a dummy complete parameter table.
     fake_S <- rep(S_unbiased, nclus) # Duplicate observed covariances to match the number of clusters
     names(fake_S) <- paste("group", seq_len(gro_clu))
-    fake_global   <- parTable(sem(model = c(step1model, step2model), 
-                                  sample.cov = fake_S,
-                                  sample.nobs = rep(N_gs, nclus), 
-                                  do.fit = FALSE,
-                                  meanstructure = F,
-                                  ceq.simple = T))
+    fake_global   <- lavaan::parTable(lavaan::sem(model = c(step1model, step2model), 
+                                                  sample.cov = fake_S,
+                                                  sample.nobs = rep(N_gs, nclus), 
+                                                  do.fit = FALSE,
+                                                  meanstructure = F,
+                                                  ceq.simple = T))
     
     # Update parameter table with only needed free parameters
     fake_global$free    <- 0 # Set all parameters to be not freely estimated 
@@ -837,10 +837,10 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     if(is.list(step1model)){ # If we have measurement blocks...
       s1table <- c()
       for(m in 1:M){
-        s1table <- rbind(s1table, parTable(S1output[[m]]))
+        s1table <- rbind(s1table, lavaan::parTable(S1output[[m]]))
       }
     } else {
-      s1table <- partable(S1output)
+      s1table <- lavaan::partable(S1output)
     }
     
     # Remove the structural parameters of the s1 parameter table
@@ -1048,7 +1048,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
       # browser()
       # M-Step
       if (i == 1) {
-        s2out <- sem(
+        s2out <- lavaan::sem(
             model = fake_global, sample.cov = rep(S_biased, nclus), sample.nobs = N_gks,
             baseline = FALSE, se = "none",
             h1 = FALSE, check.post = FALSE,
@@ -1058,7 +1058,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
         )
       } else {
         # fake_global$ustart <- NA
-        s2out <- sem(
+        s2out <- lavaan::sem(
           model = fake_global, sample.cov = rep(S_biased, nclus), sample.nobs = N_gks,
           baseline = FALSE, se = "none",
           h1 = FALSE, check.post = FALSE,
@@ -1119,8 +1119,8 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     }
     
     # Extract matrices from final step 2 output
-    EST_s2 <- lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
-    beta_gks <- lapply(EST_s2, "[[", "beta")
+    EST_s2      <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
+    beta_gks    <- lapply(EST_s2, "[[", "beta")
     psi_gks_tmp <- lapply(EST_s2, "[[", "psi")
     
     # Select useful betas
@@ -1211,14 +1211,14 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   n_free <- 0
   if (is.list(step1model)) {
     for (m in 1:m) {
-      partbl <- parTable(S1output[[m]])
+      partbl    <- lavaan::parTable(S1output[[m]])
       free_load <- which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label != partbl$plabel)
-      n_free <- n_free + length(free_load)
+      n_free    <- n_free + length(free_load)
     }
   } else if (!is.list(step1model)) {
-    partbl <- parTable(S1output)
+    partbl    <- lavaan::parTable(S1output)
     free_load <- which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label != partbl$plabel)
-    n_free <- length(free_load)
+    n_free    <- length(free_load)
   }
 
   # Get the correct number of free parameters depending on the possible combinations

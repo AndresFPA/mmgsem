@@ -1,3 +1,16 @@
+#' Standard Errors (SE) wrapper for MMGSEM
+#' 
+#' @description
+#' A wrapper to compute the SE of a fitted object by MMG-SEM. It will use the Hessian matrix to compute the SE of both the measurement and the structural parameters.
+#' 
+#' @usage se(object)
+#'
+#' @param object A resulting fitted object from the MMGSEM function.
+#'
+#' @return SE: List with the SE for all parameters. The SE are inside matrices mimicking the matrices of the parameters themselves. It also contains the corrected SE.
+#' @return HESS: Hessian matrix containing all the second derivatives of the parameters (equivalent to the SE, but in other presentation).
+#'
+#' @export
 se <- function(object){
   # Prepare some objects
   ngroups <- nrow(object$z_gks)
@@ -92,18 +105,18 @@ se <- function(object){
   n_theta  <- length(theta_vec)/g
   
   # Indices of measurement parameters
-  idx.cons <- which(object$lambda[[1]] %in% cons_vec)
-  idx.unco <- which(object$lambda[[1]] %in% unco_vec)
-  idx.theta  <- which(object$theta[[1]] %in% theta_vec[1:n_theta])
+  idx.cons <- which(object$param$lambda[[1]] %in% cons_vec)
+  idx.unco <- which(object$param$lambda[[1]] %in% unco_vec)
+  idx.theta  <- which(object$param$theta[[1]] %in% theta_vec[1:n_theta])
   
   # How many regressions and covariances?
   n_reg <- length(beta_vec)/nclus # nclus
   n_cov <- length(cov_vec)/(nclus*ngroups) # nclus*ngroups
   
   # Get indices needed for the objective function (used to input the value of the vector in corresponding place of the matrix)
-  idx.beta <- which(object$beta_ks[[1]] %in% beta_vec[1:n_reg]) # indices of the free parameters in the beta matrix 
-  idx.psi  <- which(object$psi_gks[[1, 1]] %in% cov_vec) # indices of the free parameters in the psi matrix 
-  idx.psi_vec <- match(object$psi_gks[[1, 1]][idx.psi], cov_vec[1:n_cov]) # To repeat the free parameters that needs to be repeated (i.e, covariances)
+  idx.beta <- which(object$param$beta_ks[[1]] %in% beta_vec[1:n_reg]) # indices of the free parameters in the beta matrix 
+  idx.psi  <- which(object$param$psi_gks[[1, 1]] %in% cov_vec) # indices of the free parameters in the psi matrix 
+  idx.psi_vec <- match(object$param$psi_gks[[1, 1]][idx.psi], cov_vec[1:n_cov]) # To repeat the free parameters that needs to be repeated (i.e, covariances)
   
   # I have group-specific covariances and group-cluster specific covariances.
   # Which ones are group-specific? 
@@ -248,7 +261,7 @@ se <- function(object){
   I_22 <- -HESS[step2.idx, step2.idx]
   I_21 <- -HESS[step2.idx, step1.idx]
   
-  I_22.inv <- ginv(I_22, tol = 1e-06)
+  I_22.inv <- MASS::ginv(I_22, tol = 1e-06)
   Sigma_1  <- Sigma_1[step1.idx, step1.idx]
   # browser()
   
