@@ -22,5 +22,5 @@ The model selection wrapper computes several model selection measures. Specifica
 ### Standard Errors
 The SE wrapper function computes the standard errors based on the Hessian matrix of the parameters. It relies on numerical derivation to obtain the second derivative of the loglikelihood function with respect to the parameters. Note that it also computes the *corrected* standard errors based on [Bakk et al](https://doi.org/10.1093/pan/mpu003). (2014).
 
-# Funding
+## Funding
 The research behind this R package was funded by a Vidi grant [VI.Vidi.201.133] awarded to Kim De Roover by the Netherlands Organization for Scientific Research (NWO). 
