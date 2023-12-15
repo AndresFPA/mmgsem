@@ -55,7 +55,7 @@
 #' @export
 ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
                            group, clusters, seed = NULL, userStart = NULL, s1out = NULL,
-                           max_it = 10000L, nstarts = 1L, printing = FALSE,
+                           max_it = 10000L, nstarts = 20L, printing = FALSE,
                            partition = "hard", NonInv = NULL, constraints = "loadings",
                            Endo2Cov = TRUE, allG = TRUE, fit = "factors", est_method = "local") {
   
@@ -128,7 +128,7 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
     nrpar_fac[[k]] <- model_fit[[k]]$NrPar$Fac.nrpar
     
   } # For loop ends here
-
+  # browser()
   # Also do CHull
   Chull_res      <- CHull(loglik = unlist(LL), nrpar = unlist(nrpar), nsclust = clusters)
   Chull_res_fac  <- CHull(loglik = unlist(LL_fac), nrpar = unlist(nrpar_fac), nsclust = clusters)
@@ -193,7 +193,7 @@ CHull <- function(loglik, nrpar, nsclust){
         change <- 1
     }
     while(nrhull > 2 && change == 1){ # check again whether intermediate points are on the convex hull
-        nsclusthull <- fitMat[convexhull, 1]
+        # nsclusthull <- fitMat[convexhull, 1]
         change <- 0
         for(nclust in 2:(nrhull - 1)){
             if(!identical(convexhull[(nclust-1):(nclust+1)],c(convexhull[nclust]-1,convexhull[nclust],convexhull[nclust]+1))){
