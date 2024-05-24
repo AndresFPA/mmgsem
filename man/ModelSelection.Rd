@@ -14,7 +14,7 @@ ModelSelection(
   userStart = NULL,
   s1out = NULL,
   max_it = 10000L,
-  nstarts = 1L,
+  nstarts = 20L,
   printing = FALSE,
   partition = "hard",
   NonInv = NULL,

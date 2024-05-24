@@ -103,7 +103,6 @@ Obs_loglik: Reconstruction of the observed loglikelihood after the model has con
 fit is "factors".
 
 PLEASE NOTE: This function requires 'lavaan' package to work. It also requires the function 'EStep.R'.
-################################# ALL GLOBAL SAM CODE IS NOT FUNCTIONAL YET #########################################
 }
 \description{
 Performs a mixture clustering based on the structural parameters (i.e., regressions) of a SEM model.
