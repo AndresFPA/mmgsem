@@ -53,7 +53,7 @@
 #'                     fit is "factors".
 #'
 #' PLEASE NOTE: This function requires 'lavaan' package to work. It also requires the function 'EStep.R'.
-#' ################################# ALL GLOBAL SAM CODE IS NOT FUNCTIONAL YET #########################################
+#' 
 #' @export
 MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
                    group, nclus, seed = NULL, userStart = NULL, s1out = NULL,
