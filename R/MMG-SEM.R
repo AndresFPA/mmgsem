@@ -5,10 +5,10 @@
 #'
 #' INPUT: Arguments required by the function
 #' @param dat Observed data of interest for the MMGSEM model.
-#' @param step1model Measurement model (MM). Used in step 1. Must be a string (like in lavaan). 
+#' @param S1 Measurement model (MM). Used in step 1. Must be a string (like in lavaan). 
 #'                   Can be a list of strings determing the number of measurement blocks (e.g., one string for the MM of 
 #'                   factor 1, and a second string for the MM of factor 2)  
-#' @param step2model Structural model. Used in step 2. Must be a string (like in lavaan).
+#' @param S2 Structural model. Used in step 2. Must be a string (like in lavaan).
 #' @param group Name of the group variable. Must be a string.
 #' @param nclus Pre-specified number of clusters.
 #' @param seed Pre-defined seed for the random start in case a replication is needed in the future.
@@ -55,12 +55,16 @@
 #' PLEASE NOTE: This function requires 'lavaan' package to work. It also requires the function 'EStep.R'.
 #' 
 #' @export
-MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
-                   group, nclus, seed = NULL, userStart = NULL, s1out = NULL,
+MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
+                   group, nclus, seed = NULL, userStart = NULL, s1_fit = NULL,
                    max_it = 10000L, nstarts = 20L, printing = FALSE,
-                   partition = "hard", NonInv = NULL, constraints = "loadings",
-                   Endo2Cov = TRUE, allG = TRUE, fit = "factors", 
-                   se = "none", est_method = "local", meanstr = FALSE) {
+                   partition = "hard", Endo2Cov = TRUE, allG = TRUE, fit = "factors",
+                   est_method = "local", meanstr = FALSE, ...) {
+  #browser()
+  
+  # Get arguments in ...
+  dots_args <- list(...)
+  constraints <- dots_args$group.equal
   
   # Add a warning in case there is a pre-defined start and the user also requires a multi-start
   if (!(is.null(userStart)) && nstarts > 1) {
@@ -71,8 +75,8 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   
   # Get several values relevant for future steps
   g_name  <- as.character(unique(dat[, group]))
-  vars    <- lavaan::lavNames(lavaanify(step1model, auto = TRUE))
-  lat_var <- lavaan::lavNames(lavaanify(step1model, auto = TRUE), "lv")
+  vars    <- lavaan::lavNames(lavaanify(S1, auto = TRUE))
+  lat_var <- lavaan::lavNames(lavaanify(S1, auto = TRUE), "lv")
   n_var   <- length(vars)
 
   # # Center the data per group (so that the mean for all variables in each group is 0)
@@ -102,125 +106,23 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   })
   
   ## STEP 1 - MMG-SEM ----------------------------------------------------------------------------------------
-
-  # Step 1: Get group-specific factor covariances
-  # Perform Step 1 according to the number of measurement blocks
+  # Save the measurement model results
+  # Call function to run Step 1 of MMG-SEM (estimates CFA)
+  Step1_args <- list(S1 = S1, s1_fit = s1_fit, centered = centered, 
+                     group = group, S_unbiased = S_unbiased)
+  Step1_args <- c(dots_args, Step1_args)
+  MM <- do.call(what = Step1, args = Step1_args)
   
-  if (is.list(step1model)) { # Do we have measurement blocks?
-    M <- length(step1model) # How many measurement blocks?
-
-    if (!is.null(s1out)) {
-      # If the user inputs their own step 1 results, use it
-      S1output <- s1out
-    } else if (is.null(s1out)) {
-      # If not, estimate step 1 using cfa()
-      S1output <- vector(mode = "list", length = length(step1model))
-      for (m in 1:M) {
-        # Estimate one cfa per measurement block
-        S1output[[m]] <- lavaan::cfa(
-          model = step1model[[m]], data = centered, group = group,
-          estimator = "ML", group.equal = constraints,
-          se = se, test = "none", baseline = FALSE, h1 = FALSE,
-          implied = FALSE, loglik = FALSE,
-          meanstructure = FALSE, group.partial = NonInv
-        )
-      }
-    }
-
-    # How many groups?
-    ngroups <- lavInspect(S1output[[1]], "ngroups")
-
-    # Extract measurement parameters per measurement block
-    # Extract Lambda & Theta for each group in all blocks
-    # Initialize lists to store lambdas and thetas per block
-    lambda_block <- vector(mode = "list", length = M)
-    theta_block  <- vector(mode = "list", length = M)
-    for (m in 1:M) {
-      EST_block         <- lavaan::lavInspect(S1output[[m]], "est")
-      lambda_block[[m]] <- lapply(X = EST_block, "[[", "lambda")
-      theta_block[[m]]  <- lapply(X = EST_block, "[[", "theta")
-    }
-
-    # Put together lambda & theta for all groups
-    # We should end with one lambda and theta matrix per group
-    lambda_group <- vector(mode = "list", length = ngroups)
-    theta_group  <- vector(mode = "list", length = ngroups)
-    for (g in 1:ngroups) {
-      for (m in 1:M) { # Put matrices of the same group in the same list
-        lambda_group[[g]][[m]] <- lambda_block[[m]][[g]]
-        theta_group[[g]][[m]]  <- theta_block[[m]][[g]]
-      }
-      
-      # Put together the matrices per group
-      # Lambda
-      lambda_group[[g]] <- lavaan::lav_matrix_bdiag(lambda_group[[g]])
-
-      # Theta
-      theta_group[[g]]  <- lavaan::lav_matrix_bdiag(theta_group[[g]])
-
-      # Label correctly the rows and columns of the resulting matrices
-      # Lambda
-      rownames(lambda_group[[g]]) <- vars
-      colnames(lambda_group[[g]]) <- lat_var
-
-      # Theta
-      rownames(theta_group[[g]]) <- colnames(theta_group[[g]]) <- vars
-    }
-
-    # Change names and get matrices/values relevant for future steps
-    lambda_gs <- lambda_group
-    theta_gs  <- theta_group
-    N_gs      <- lavaan::lavInspect(S1output[[1]], "nobs") # nobs per group
-
-    # Estimate cov_eta (Covariance between the factors)
-    M_mat   <- vector(mode = "list", length = ngroups) # M matrices from SAM
-    cov_eta <- vector(mode = "list", length = ngroups)
-
-    for (g in 1:ngroups) {
-      # Compute the M (mapping) matrix in case we have different blocks
-      lambda_g <- lambda_gs[[g]]
-      theta_g  <- theta_gs[[g]]
-      M_mat[[g]] <- solve(t(lambda_g) %*% solve(theta_g) %*% lambda_g) %*% t(lambda_g) %*% solve(theta_g)
-
-      # Get the covariance of the factors (cov_eta)
-      # First, get biased sample covariance matrix per group (S)
-      S <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
-      cov_eta[[g]] <- M_mat[[g]] %*% (S - theta_g) %*% t(M_mat[[g]])
-    }
-  } else if (!is.list(step1model)) {
-    # If not a list, then we only have one measurement block (all latent variables at the same time)
-    if (!is.null(s1out)) {
-      # If the user input their own step 1 results, use it
-      S1output <- s1out
-    } else if (is.null(s1out)) {
-      S1output <- lavaan::cfa(
-        model = step1model, data = centered, group = group,
-        estimator = "ML", group.equal = constraints,
-        se = se, test = "none", baseline = FALSE, h1 = FALSE,
-        implied = FALSE, loglik = FALSE,
-        meanstructure = FALSE, group.partial = NonInv
-      )
-    }
-
-    # Define some important objects
-    # How many groups?
-    ngroups <- lavaan::lavInspect(S1output, "ngroups")
-    N_gs    <- lavaan::lavInspect(S1output, "nobs") # nobs per group
-
-    # all estimated model matrices, per group
-    EST       <- lavaan::lavInspect(S1output, "est", add.class = FALSE, add.labels = TRUE)
-    theta_gs  <- lapply(EST, "[[", "theta")
-    lambda_gs <- lapply(EST, "[[", "lambda")
-    cov_eta   <- lapply(EST, "[[", "psi") # cov_eta name refers to Variance of eta (eta being the latent variables)
-  }
-
-  # Which are our latent variables?
-  lat_var <- lavaan::lavNames(lavaan::lavaanify(step1model, auto = TRUE), "lv")
-  gro_clu <- ngroups * nclus
+  # Extract necessary objects
+  ngroups   <- MM$ngroups
+  S1output  <- MM$S1output
+  lambda_gs <- MM$lambda_gs
+  theta_gs  <- MM$theta_gs
+  cov_eta   <- MM$cov_eta
+  N_gs      <- MM$N_gs
+  S_biased  <- MM$S_biased
   
-  # Biased cov matrix
-  S_biased <- vector(mode = "list", length = ngroups)
-  for(g in 1:ngroups){S_biased[[g]] <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]}
+  gro_clu   <- ngroups * nclus
   
   # STEP 2 (EM algorithm for model estimation) -----------------------------------------------------
   # We perform a MULTI-START procedure to avoid local maxima.
@@ -249,7 +151,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   reorder_obs <- function(x, matrix) {
     # Re-write model
     # Split into lines
-    lines_model <- unlist(strsplit(unlist(step1model), "\n"))
+    lines_model <- unlist(strsplit(unlist(S1), "\n"))
     rewritten <- c()
     # browser()
     # Extract the observed variable names per factor
@@ -271,7 +173,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     }
 
     # Run fake measur_model
-    fake_measur <- cfa(model = rewritten, data = dat, do.fit = F)
+    fake_measur  <- lavaan::cfa(model = rewritten, data = dat, do.fit = F)
     correct_vars <- lavNames(fake_measur)
 
     if (matrix == "lambda") {
@@ -288,7 +190,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   # Do a fake sem() to obtain the correct settings to use in Step 2
   # just a single sample cov!
   fake <- lavaan::sem(
-    model = step2model, sample.cov = rep(cov_eta[1], nclus),
+    model = S2, sample.cov = rep(cov_eta[1], nclus),
     sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
     baseline = FALSE,
     h1 = FALSE, check.post = FALSE,
@@ -299,7 +201,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   )
   FakeprTbl <- parTable(fake)
   fake@Options$do.fit <- TRUE
-  fake@Options$se     <- se
+  fake@Options$se     <- "none"
   fake@ParTable$start <- NULL
   fake@ParTable$est   <- NULL
   fake@ParTable$se    <- NULL
@@ -356,7 +258,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     )
     
     fake_lv[[lv]]@Options$do.fit <- TRUE
-    fake_lv[[lv]]@Options$se     <- se
+    fake_lv[[lv]]@Options$se     <- "none"
     fake_lv[[lv]]@ParTable$start <- NULL
     fake_lv[[lv]]@ParTable$est   <- NULL
     fake_lv[[lv]]@ParTable$se    <- NULL
@@ -818,7 +720,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     # Create a dummy complete parameter table.
     fake_S <- rep(S_unbiased, nclus) # Duplicate observed covariances to match the number of clusters
     names(fake_S) <- paste("group", seq_len(gro_clu))
-    fake_global   <- lavaan::parTable(lavaan::sem(model = c(step1model, step2model), 
+    fake_global   <- lavaan::parTable(lavaan::sem(model = c(S1, S2), 
                                                   sample.cov = fake_S,
                                                   sample.nobs = rep(N_gs, nclus), 
                                                   do.fit = FALSE,
@@ -834,7 +736,7 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
     
     # Fill the measurement model parameters in the fake_global table
     # Get parameter table of the measurement model
-    if(is.list(step1model)){ # If we have measurement blocks...
+    if(is.list(S1)){ # If we have measurement blocks...
       s1table <- c()
       for(m in 1:M){
         s1table <- rbind(s1table, lavaan::parTable(S1output[[m]]))
@@ -1209,13 +1111,13 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   # How many free loadings?
   # Identify the free loadings using the parameter table from lavaan
   n_free <- 0
-  if (is.list(step1model)) {
+  if (is.list(S1)) {
     for (m in 1:m) {
       partbl    <- lavaan::parTable(S1output[[m]])
       free_load <- which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label != partbl$plabel)
       n_free    <- n_free + length(free_load)
     }
-  } else if (!is.list(step1model)) {
+  } else if (!is.list(S1)) {
     partbl    <- lavaan::parTable(S1output)
     free_load <- which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label != partbl$plabel)
     n_free    <- length(free_load)
@@ -1316,6 +1218,139 @@ MMGSEM <- function(dat, step1model = NULL, step2model = NULL,
   ))
 }
 
+
+# Step 1 function ----------------------------------------------------------------------------------
+
+Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
+                  group = group, S_unbiased = S_unbiased, ...){
+  # Step 1: Get group-specific factor covariances
+  # Perform Step 1 according to the number of measurement blocks
+  
+  if (is.list(S1)) { # Do we have measurement blocks?
+    M <- length(S1) # How many measurement blocks?
+    
+    if (!is.null(s1_fit)) {
+      # If the user inputs their own step 1 results, use it
+      S1output <- s1_fit
+    } else if (is.null(s1_fit)) {
+      # If not, estimate step 1 using cfa()
+      S1output <- vector(mode = "list", length = length(S1))
+      for (m in 1:M) {
+        # Estimate one cfa per measurement block
+        S1output[[m]] <- lavaan::cfa(
+          model = S1[[m]], data = centered, group = group,
+          estimator = "ML", se = "none", test = "none", 
+          baseline = FALSE, h1 = FALSE,
+          implied = FALSE, loglik = FALSE,
+          meanstructure = FALSE, ...
+        )
+      }
+    }
+    
+    # How many groups?
+    ngroups <- lavInspect(S1output[[1]], "ngroups")
+    
+    # Extract measurement parameters per measurement block
+    # Extract Lambda & Theta for each group in all blocks
+    # Initialize lists to store lambdas and thetas per block
+    lambda_block <- vector(mode = "list", length = M)
+    theta_block  <- vector(mode = "list", length = M)
+    for (m in 1:M) {
+      EST_block         <- lavaan::lavInspect(S1output[[m]], "est")
+      lambda_block[[m]] <- lapply(X = EST_block, "[[", "lambda")
+      theta_block[[m]]  <- lapply(X = EST_block, "[[", "theta")
+    }
+    
+    # Put together lambda & theta for all groups
+    # We should end with one lambda and theta matrix per group
+    lambda_group <- vector(mode = "list", length = ngroups)
+    theta_group  <- vector(mode = "list", length = ngroups)
+    for (g in 1:ngroups) {
+      for (m in 1:M) { # Put matrices of the same group in the same list
+        lambda_group[[g]][[m]] <- lambda_block[[m]][[g]]
+        theta_group[[g]][[m]]  <- theta_block[[m]][[g]]
+      }
+      
+      # Put together the matrices per group
+      # Lambda
+      lambda_group[[g]] <- lavaan::lav_matrix_bdiag(lambda_group[[g]])
+      
+      # Theta
+      theta_group[[g]]  <- lavaan::lav_matrix_bdiag(theta_group[[g]])
+      
+      # Label correctly the rows and columns of the resulting matrices
+      # Lambda
+      rownames(lambda_group[[g]]) <- vars
+      colnames(lambda_group[[g]]) <- lat_var
+      
+      # Theta
+      rownames(theta_group[[g]]) <- colnames(theta_group[[g]]) <- vars
+    }
+    
+    # Change names and get matrices/values relevant for future steps
+    lambda_gs <- lambda_group
+    theta_gs  <- theta_group
+    N_gs      <- lavaan::lavInspect(S1output[[1]], "nobs") # nobs per group
+    
+    # Estimate cov_eta (Covariance between the factors)
+    M_mat   <- vector(mode = "list", length = ngroups) # M matrices from SAM
+    cov_eta <- vector(mode = "list", length = ngroups)
+    
+    for (g in 1:ngroups) {
+      # Compute the M (mapping) matrix in case we have different blocks
+      lambda_g <- lambda_gs[[g]]
+      theta_g  <- theta_gs[[g]]
+      M_mat[[g]] <- solve(t(lambda_g) %*% solve(theta_g) %*% lambda_g) %*% t(lambda_g) %*% solve(theta_g)
+      
+      # Get the covariance of the factors (cov_eta)
+      # First, get biased sample covariance matrix per group (S)
+      S <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
+      cov_eta[[g]] <- M_mat[[g]] %*% (S - theta_g) %*% t(M_mat[[g]])
+    }
+  } else if (!is.list(S1)) {
+    # If not a list, then we only have one measurement block (all latent variables at the same time)
+    if (!is.null(s1_fit)) {
+      # If the user input their own step 1 results, use it
+      S1output <- s1_fit
+    } else if (is.null(s1_fit)) {
+      S1output <- lavaan::cfa(
+        model = S1, data = centered, group = group,
+        estimator = "ML", se = "none", test = "none", 
+        baseline = FALSE, h1 = FALSE,
+        implied = FALSE, loglik = FALSE,
+        meanstructure = FALSE, ...
+      )
+    }
+    
+    # Define some important objects
+    # How many groups?
+    ngroups <- lavaan::lavInspect(S1output, "ngroups")
+    N_gs    <- lavaan::lavInspect(S1output, "nobs") # nobs per group
+    
+    # all estimated model matrices, per group
+    EST       <- lavaan::lavInspect(S1output, "est", add.class = FALSE, add.labels = TRUE)
+    theta_gs  <- lapply(EST, "[[", "theta")
+    lambda_gs <- lapply(EST, "[[", "lambda")
+    cov_eta   <- lapply(EST, "[[", "psi") # cov_eta name refers to Variance of eta (eta being the latent variables)
+  }
+  
+  # Biased cov matrix
+  S_biased <- vector(mode = "list", length = ngroups)
+  for(g in 1:ngroups){S_biased[[g]] <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]}
+  
+  # Return all the useful objects
+  return(list(
+    S1output  = S1output,
+    lambda_gs = lambda_gs,
+    theta_gs  = theta_gs,
+    cov_eta   = cov_eta,
+    ngroups   = ngroups,
+    N_gs      = N_gs,
+    S_biased  = S_biased
+  ))
+}
+
+# E-step --------------------------------------------------------
 EStep <- function(pi_ks, ngroup, nclus, loglik){
   
   max_g <-rep(0,ngroup)
