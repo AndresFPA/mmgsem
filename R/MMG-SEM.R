@@ -25,7 +25,7 @@
 #'                             [5,]    0    1
 #'                             [6,]    0    1
 #'
-#' @param s1out Resulting lavaan object from a cfa() analysis. Can be used to directly input the results from the step 1
+#' @param s1_fit Resulting lavaan object from a cfa() analysis. Can be used to directly input the results from the step 1
 #'              if the user only wants to use MMGSEM() to estimate the structural model (Step 2). If not NULL, MMGSEM()
 #'              will skip the estimation of Step 1 and use the s1out object as the input for Step 2.
 #' @param max_it Maximum number of iterations for each start.
@@ -36,7 +36,7 @@
 #' @param Endo2Cov TRUE or FALSE argument to determine whether to allow or not covariance between endogenous 2 variables.
 #'                 If TRUE (the default), the covariance between endogenous factors is allowed.
 #' @param allG TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
-#'             By default, is TRUE.
+#'             By default, it is TRUE.
 #' @param fit String argument. Either "factors" or "observed". Determines which loglikelihood will be used to fit the model.
 #' @param est_method either "local" or "global. Follows local and global approaches from the SAM method. GLOBAL NOT FUNCTIONAL YET.
 #'
@@ -59,12 +59,16 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
                    group, nclus, seed = NULL, userStart = NULL, s1_fit = NULL,
                    max_it = 10000L, nstarts = 20L, printing = FALSE,
                    partition = "hard", Endo2Cov = TRUE, allG = TRUE, fit = "factors",
-                   est_method = "local", meanstr = FALSE, ...) {
-  #browser()
+                   est_method = "local", meanstr = FALSE,   
+                   end.ltv.fixed = F, rescaling = F, 
+                   ...) {
   
   # Get arguments in ...
+  # Such arguments are the ones that will pass on lavaan's functions
   dots_args <- list(...)
   constraints <- dots_args$group.equal
+  noninv      <- dots_args$group.partial
+  ordered     <- dots_args$ordered
   
   # Add a warning in case there is a pre-defined start and the user also requires a multi-start
   if (!(is.null(userStart)) && nstarts > 1) {
@@ -72,13 +76,49 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
     nstarts <- 1
   }
 
-  
   # Get several values relevant for future steps
   g_name  <- as.character(unique(dat[, group]))
   vars    <- lavaan::lavNames(lavaanify(S1, auto = TRUE))
   lat_var <- lavaan::lavNames(lavaanify(S1, auto = TRUE), "lv")
   n_var   <- length(vars)
 
+  # Add an error in case of incompatibility in the arguments regarding the scale of the latent variables
+  if(end.ltv.fixed == T & rescaling == T){
+    stop("end.ltv.fixed = T and rescaling = T arguments set the factor variances to different scales. Please choose one scaling method.")
+  }
+  
+  if(ordered == F & rescaling == T){
+    stop("rescaling = T only works when ordered = T. When ordered = T, the scale of some of the factor variances are set to 1 (correlations). Rescaling = T effectively turns them back to covariances.")
+  }
+  
+  # Change the syntax of the model in step 1 if the data is ordered
+  if(ordered == T){
+    # Save original syntax for later code
+    s1ori <- S1
+    
+    # Get new syntax
+    S1 <- as.character(
+      semTools::measEq.syntax(configural.model = S1,
+                              dat              = dat,
+                              parameterization = "delta",
+                              ordered          = vars,
+                              ID.fac           = "std.lv",
+                              ID.cat           = "Wu",
+                              group            = group,
+                              group.equal      = constraints,
+                              group.partial    = noninv)
+    )
+    
+    # When ordered = T, by default, measEq.syntax standardizes the lv following Wu&Estabrook(2016).
+    # MMG-SEM does not work with standardized lv by default. Thus, a rescaling is needed
+    rescaling <- T # Set to TRUE, it will come later in the code
+    
+    # It is possible to work with standardized lv by setting end.ltv.fixed = T. This means that rescaling must be set to F
+    if (end.ltv.fixed == T){
+      rescaling <- F
+    }
+  }
+  
   # # Center the data per group (so that the mean for all variables in each group is 0)
   centered <- dat
   
@@ -89,15 +129,18 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
     meanstr <- T
   }
   
-  if(isFALSE(meanstr)){ 
-    group.idx <- match(dat[, group], g_name)
-    group.sizes <- tabulate(group.idx)
-    group.means <- rowsum.default(as.matrix(dat[, vars]),
-                                  group = group.idx, reorder = FALSE,
-                                  na.rm = FALSE
-    ) / group.sizes
-    centered[, vars] <- dat[, vars] - group.means[group.idx, , drop = FALSE]
-  } 
+  # Only center if data is not categorical and the mean structure is not required
+  if(ordered == F){
+    if(isFALSE(meanstr)){ 
+      group.idx <- match(dat[, group], g_name)
+      group.sizes <- tabulate(group.idx)
+      group.means <- rowsum.default(as.matrix(dat[, vars]),
+                                    group = group.idx, reorder = FALSE,
+                                    na.rm = FALSE
+      ) / group.sizes
+      centered[, vars] <- dat[, vars] - group.means[group.idx, , drop = FALSE]
+    } 
+  }
   
   
   # Get sample covariance matrix per group (used later)
@@ -124,6 +167,22 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   
   gro_clu   <- ngroups * nclus
   
+  # Only happens when ordinal = T
+  # Rescale covariance matrices when ordinal
+  if (rescaling == T){
+    # browser()
+    for (g in 1:ngroups) {
+      # Extract the first loading of each item (the one that would be 1 if unstandardized)
+      loadings <- apply(lambda_gs[[g]], 2, function(x) {x[which(x != 0)]})[1, ]
+      # Multiply standardized variances with squared corresponding loading
+      sds <- sqrt(diag(cov_eta[[g]]) * loadings^2)
+      # Re-scale everything to correlations first (depending on the constraints, only the first group may have a correlation in cov_eta)
+      cov_eta[[g]] <- stats::cov2cor(cov_eta[[g]])
+      # Use lavaan's cor2cov to go back the covariances
+      cov_eta[[g]] <- lavaan::cor2cov(R = cov_eta[[g]], sds = sds)
+    }
+  }
+  
   # STEP 2 (EM algorithm for model estimation) -----------------------------------------------------
   # We perform a MULTI-START procedure to avoid local maxima.
   # Initialize objects to store results per random start.
@@ -148,6 +207,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   }
 
   # Re-order for measurement model matrices (observed variables must be in the same order as the factors)
+  if(ordered == T){S1 <- s1ori} # Recover original syntax for correct reordering
   reorder_obs <- function(x, matrix) {
     # Re-write model
     # Split into lines
@@ -545,6 +605,12 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
             psi[endog2, endog2][row(psi[endog2, endog2]) != col(psi[endog2, endog2])] <- 0
           }
 
+          ###### EXPERIMENT ######
+          # If ordered = T force the variance of the factors to be 1 (to follow the scaling from step 1)
+          if (end.ltv.fixed == T){
+            diag(psi) <- 1
+          }
+          
           # Store for future check
           psi_gks[[g, k]] <- psi
 
@@ -1239,10 +1305,10 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
         # Estimate one cfa per measurement block
         S1output[[m]] <- lavaan::cfa(
           model = S1[[m]], data = centered, group = group,
-          estimator = "ML", se = "none", test = "none", 
+          se = "none", test = "none", 
           baseline = FALSE, h1 = FALSE,
           implied = FALSE, loglik = FALSE,
-          meanstructure = FALSE, ...
+          ...
         )
       }
     }
@@ -1315,10 +1381,10 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
     } else if (is.null(s1_fit)) {
       S1output <- lavaan::cfa(
         model = S1, data = centered, group = group,
-        estimator = "ML", se = "none", test = "none", 
+        se = "none", test = "none", 
         baseline = FALSE, h1 = FALSE,
         implied = FALSE, loglik = FALSE,
-        meanstructure = FALSE, ...
+        ...
       )
     }
     
