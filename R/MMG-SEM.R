@@ -27,18 +27,25 @@
 #'
 #' @param s1_fit Resulting lavaan object from a cfa() analysis. Can be used to directly input the results from the step 1
 #'              if the user only wants to use MMGSEM() to estimate the structural model (Step 2). If not NULL, MMGSEM()
-#'              will skip the estimation of Step 1 and use the s1out object as the input for Step 2.
+#'              will skip the estimation of Step 1 and use the s1out object as the input for Step 2. If NULL, MMGSEM() will
+#'              estimate both step 1 and step 2.
 #' @param max_it Maximum number of iterations for each start.
 #' @param nstarts Number of random starts that will be performed (in an attempt to avoid local maxima).
 #' @param partition Type of random partition used to start the EM algorithm. Can be "hard" and "soft".
 #' @param constraints String containing the constrains of the model. Receives the same input as group.equal in lavaan.
 #' @param NonInv String containing the non-invariances of the model. Similar to group.partial in lavaan.
-#' @param Endo2Cov TRUE or FALSE argument to determine whether to allow or not covariance between endogenous 2 variables.
-#'                 If TRUE (the default), the covariance between endogenous factors is allowed.
-#' @param allG TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
-#'             By default, it is TRUE.
-#' @param fit String argument. Either "factors" or "observed". Determines which loglikelihood will be used to fit the model.
-#' @param est_method either "local" or "global. Follows local and global approaches from the SAM method. GLOBAL NOT FUNCTIONAL YET.
+#' @param endogenous_cov TRUE or FALSE argument to determine whether to allow or not covariance between purely endogeonus variables.
+#'                       If TRUE (the default), the covariance between endogenous factors is allowed.
+#' @param endo_group_specific TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
+#'                            By default, it is TRUE.
+#' @param sam_method either "local" or "global. Follows local and global approaches from the SAM method. GLOBAL NOT FUNCTIONAL YET.
+#' @param rescaling Only used when data is ordered. By default, MMGSEM uses the marker variable scaling approach. But identification
+#'                  constraints with ordinal data (by default) are handled by standardizing the factors' variance in the first step. 
+#'                  The rescaling argument (either T or F) rescales the factor variances and loadings to the marker variable scaling
+#'                  before running step 2. It is set to T by default (rescaling happens). If set to F, the factor variances are kept fixed to 1.
+#' @param ... MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
+#'            and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables, 
+#'            group.equal for constraints, group.partial for non-invariances, etc.
 #'
 #' OUTPUT: The function will return a list with the following results:
 #' @return z_gks: Posterior classification probabilities or cluster memberships (ngroups*nclus matrix).
@@ -52,15 +59,16 @@
 #' @return Obs_loglik: Reconstruction of the observed loglikelihood after the model has converged. Only valid when
 #'                     fit is "factors".
 #'
-#' PLEASE NOTE: This function requires 'lavaan' package to work. It also requires the function 'EStep.R'.
+#' PLEASE NOTE: This function requires 'lavaan' package to work.
 #' 
 #' @export
 MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
                    group, nclus, seed = NULL, userStart = NULL, s1_fit = NULL,
                    max_it = 10000L, nstarts = 20L, printing = FALSE,
-                   partition = "hard", Endo2Cov = TRUE, allG = TRUE, fit = "factors",
-                   est_method = "local", meanstr = FALSE,   
-                   end.ltv.fixed = F, rescaling = F, 
+                   partition = "hard", endogenous_cov = TRUE, 
+                   endo_group_specific = TRUE,
+                   sam_method = "local", meanstr = FALSE,   
+                   rescaling = F, 
                    ...) {
   
   # Get arguments in ...
@@ -68,7 +76,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   dots_args <- list(...)
   constraints <- dots_args$group.equal
   noninv      <- dots_args$group.partial
-  ordered     <- dots_args$ordered
+  ordered     <- dots_args$ordered; if(is.null(ordered)){ordered <- F}
+  std.lv      <- dots_args$std.lv;  if(is.null(std.lv)){std.lv <- F}
   
   # Add a warning in case there is a pre-defined start and the user also requires a multi-start
   if (!(is.null(userStart)) && nstarts > 1) {
@@ -83,8 +92,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   n_var   <- length(vars)
 
   # Add an error in case of incompatibility in the arguments regarding the scale of the latent variables
-  if(end.ltv.fixed == T & rescaling == T){
-    stop("end.ltv.fixed = T and rescaling = T arguments set the factor variances to different scales. Please choose one scaling method.")
+  if(std.lv == T & rescaling == T){
+    warning("std.lv = T and rescaling = T arguments set the factor variances to different scales. Please choose one scaling method.")
   }
   
   if(ordered == F & rescaling == T){
@@ -113,8 +122,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
     # MMG-SEM does not work with standardized lv by default. Thus, a rescaling is needed
     rescaling <- T # Set to TRUE, it will come later in the code
     
-    # It is possible to work with standardized lv by setting end.ltv.fixed = T. This means that rescaling must be set to F
-    if (end.ltv.fixed == T){
+    # It is possible to work with standardized lv by setting std.lv = T. This means that rescaling must be set to F
+    if (std.lv == T){
       rescaling <- F
     }
   }
@@ -385,8 +394,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       # N_gks <- as.vector(N_gks)
 
       # Weight posteriors for each endogenous factor - Not necessary in the first iteration
-      # To avoid bias when allG == T. That is, when the endogenous variances are group-specific
-      if (isTRUE(allG) & i > 1) {
+      # To avoid bias when endo_group_specific == T. That is, when the endogenous variances are group-specific
+      if (isTRUE(endo_group_specific) & i > 1) {
         for (lv in 1:length(endog)) {
           for (k in 1:nclus) {
             for (g in 1:ngroups) {
@@ -401,9 +410,9 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
       # Trick to avoid slow multi-group estimation
       # Get a weighted averaged covariance matrix for each cluster
-      if (isFALSE(allG) | i == 1) {
+      if (isFALSE(endo_group_specific) | i == 1) {
         
-        # Do this when allG is False OR when it is True and we are in the first iteration
+        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
         # For the first iteration there is no weighted z_gks
         COV <- vector("list", length = nclus)
 
@@ -445,8 +454,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       # the 'groups' are the clusters
       # Note: this makes all resulting parameters to be cluster-specific (it is reconstructed later)
 
-      if (isFALSE(allG) | i == 1) {
-        # Do this when allG is False OR when it is True and we are in the first iteration
+      if (isFALSE(endo_group_specific) | i == 1) {
+        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
         # For the first iteration, perform the full structural model estimation
         s2out <- lavaan::lavaan(
           slotOptions       = fake@Options,
@@ -489,8 +498,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       I <- diag(length(lat_var)) # Identity matrix based on number of latent variables. Used later
 
       # Extract cluster-specific parameters from step 2
-      if (isFALSE(allG) | i == 1) {
-        # Do this when allG is False OR when it is True and we are in the first iteration
+      if (isFALSE(endo_group_specific) | i == 1) {
+        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
         # In iteration one, there is only model (s2out) from which we extract the parameters.
         if (nclus == 1) {
           EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
@@ -581,8 +590,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
           # Exogenous (co)variance is always group-specific
           psi[exog, exog] <- cov_eta[[g]][exog, exog] # Replace the group-specific part
 
-          # If the user required group-specific endogenous covariances (allG = T), do:
-          if (allG == T) {
+          # If the user required group-specific endogenous covariances (endo_group_specific = T), do:
+          if (endo_group_specific == T) {
             # Take into account the effect of the cluster-specific regressions
             # cov_eta[[g]] = solve(I - beta) %*% psi %*% t(solve(I - beta))
             # If we solve for psi, then:
@@ -601,13 +610,13 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
           }
 
           # If required by the user, set to 0 the covariance between endog 2 factors
-          if (isFALSE(Endo2Cov)) {
+          if (isFALSE(endogenous_cov)) {
             psi[endog2, endog2][row(psi[endog2, endog2]) != col(psi[endog2, endog2])] <- 0
           }
 
           ###### EXPERIMENT ######
           # If ordered = T force the variance of the factors to be 1 (to follow the scaling from step 1)
-          if (end.ltv.fixed == T){
+          if (std.lv == T){
             diag(psi) <- 1
           }
           
@@ -615,36 +624,54 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
           psi_gks[[g, k]] <- psi
 
           # Get log-likelihood by comparing factor covariance matrix of step 1 (cov_eta) and step 2 (Sigma)
-          if (fit == "factors") {
-            # Estimate Sigma (factor covariance matrix of step 2)
-            Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
-            Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
-            
-            # Estimate the loglikelihood
-            loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
-              sample.mean = rep(0, nrow(cov_eta[[1]])),
-              sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
-              # sample.nobs = N_gks[g, k],
-              sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
-              Mu          = rep(0, nrow(cov_eta[[1]])),
-              Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
-            )
-          } else if (fit == "observed") {
-            # browser()
-            S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
-            Sigma[[g, k]] <- lambda_gs[[g]] %*% solve(I - beta) %*% psi %*% t(solve(I - beta)) %*% t(lambda_gs[[g]]) + theta_gs[[g]]
-            Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
-            # Sigma[[g, k]][lower.tri(Sigma[[g, k]])] <- t(Sigma[[g, k]])[lower.tri(Sigma[[g, k]])]
-            loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
-              sample.mean = rep(0, length(vars)),
-              sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
-              sample.cov  = S_biased, # Item (observed) covariance matrix from step 1
-              Mu          = rep(0, length(vars)),
-              Sigma       = Sigma[[g, k]] # Item (observed) covariance matrix from step 2
-            )
-          }
+          # Estimate Sigma (factor covariance matrix of step 2)
+          Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
+          Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
+          
+          # Estimate the loglikelihood
+          loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+            sample.mean = rep(0, nrow(cov_eta[[1]])),
+            sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+            # sample.nobs = N_gks[g, k],
+            sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
+            Mu          = rep(0, nrow(cov_eta[[1]])),
+            Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
+          )
+          
           loglik_gks[g, k] <- loglik_gk
           loglik_gksw[g, k] <- log(pi_ks[k]) + loglik_gk # weighted loglik
+          
+          # # # Deprecated
+          # # Get log-likelihood by comparing factor covariance matrix of step 1 (cov_eta) and step 2 (Sigma)
+          # if (fit == "factors") {
+          #   # Estimate Sigma (factor covariance matrix of step 2)
+          #   Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
+          #   Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
+          #   
+          #   # Estimate the loglikelihood
+          #   loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          #     sample.mean = rep(0, nrow(cov_eta[[1]])),
+          #     sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+          #     # sample.nobs = N_gks[g, k],
+          #     sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
+          #     Mu          = rep(0, nrow(cov_eta[[1]])),
+          #     Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
+          #   )
+          # } else if (fit == "observed") {
+          #   # browser()
+          #   S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
+          #   Sigma[[g, k]] <- lambda_gs[[g]] %*% solve(I - beta) %*% psi %*% t(solve(I - beta)) %*% t(lambda_gs[[g]]) + theta_gs[[g]]
+          #   Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
+          #   # Sigma[[g, k]][lower.tri(Sigma[[g, k]])] <- t(Sigma[[g, k]])[lower.tri(Sigma[[g, k]])]
+          #   loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          #     sample.mean = rep(0, length(vars)),
+          #     sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+          #     sample.cov  = S_biased, # Item (observed) covariance matrix from step 1
+          #     Mu          = rep(0, length(vars)),
+          #     Sigma       = Sigma[[g, k]] # Item (observed) covariance matrix from step 2
+          #   )
+          # }
+
         } # ngroups
       } # cluster
 
@@ -693,7 +720,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   colnames(z_gks) <- paste("Cluster", seq_len(nclus))
 
   # Extract matrices from final step 2 output
-  if (isFALSE(allG)) {
+  if (isFALSE(endo_group_specific)) {
     if (nclus == 1) {
       EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
       beta_ks <- EST_s2[["beta"]]
@@ -703,7 +730,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       beta_ks <- lapply(EST_s2, "[[", "beta")
       psi_ks  <- lapply(EST_s2, "[[", "psi")
     }
-  } else if (isTRUE(allG)) {
+  } else if (isTRUE(endo_group_specific)) {
     EST_s2_lv <- vector(mode = "list", length = length(endog))
     beta_ks_lv <- vector(mode = "list", length = length(endog))
     psi_ks_lv <- vector(mode = "list", length = length(endog))
@@ -752,8 +779,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       psi_gks[[g, k]] <- psi_k
       psi_gks[[g, k]][exog, exog] <- cov_eta[[g]][exog, exog]
 
-      # If the user required group-specific endogenous covariances (allG = T), do:
-      if (allG == T) {
+      # If the user required group-specific endogenous covariances (endo_group_specific = T), do:
+      if (endo_group_specific == T) {
         # Take into account the effect of the cluster-specific regressions
         # cov_eta[[g]] = solve(I - beta) %*% psi %*% t(solve(I - beta))
         # If we solve for psi, then:
@@ -769,7 +796,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       }
 
       # If required by the user, endog2 covariances are set to 0
-      if (isFALSE(Endo2Cov)) {
+      if (isFALSE(endogenous_cov)) {
         offdiag <- row(psi_gks[[g, k]][endog2, endog2]) != col(psi_gks[[g, k]][endog2, endog2])
         psi_gks[[g, k]][endog2, endog2][offdiag] <- 0
       }
@@ -782,7 +809,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   # If the user requires global estimation of SAM:
   #   - Use the final local estimates to start global SAM.
   #   - Prepare the parameter table
-  if(est_method == "global"){
+  if(sam_method == "global"){
     # Create a dummy complete parameter table.
     fake_S <- rep(S_unbiased, nclus) # Duplicate observed covariances to match the number of clusters
     names(fake_S) <- paste("group", seq_len(gro_clu))
@@ -1191,10 +1218,10 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
   # Get the correct number of free parameters depending on the possible combinations
   # browser()
-  if (allG == F) { # Is endogenous covariance group-specific?
+  if (endo_group_specific == F) { # Is endogenous covariance group-specific?
     nr_par_factors <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * nclus) + (n_cov_endo2 * nclus)
     nr_pars <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * nclus) + (n_cov_endo2 * nclus) + (n_res * ngroups) + (n_load - Q - n_free) + (n_free * ngroups)
-  } else if (allG == T) {
+  } else if (endo_group_specific == T) {
     nr_par_factors <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * ngroups) + (n_cov_endo2 * ngroups)
     nr_pars <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * ngroups) + (n_cov_endo2 * ngroups) + (n_res * ngroups) + (n_load - Q - n_free) + (n_free * ngroups)
   }
@@ -1267,8 +1294,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
     MM            = S1output, # Output of step 1 (measurement model)
     param         = list(psi_gks = psi_gks, lambda = lambda_gs, # Lambda is invariant across all groups
                          theta = theta_gs, beta_ks = beta_ks, cov_eta = cov_eta), # Factor covariance matrix from first step
-    logLik        = list(loglik        = LL, # Final logLik of the model (its meaning depends on arguments "fit" and "est_method")
-                         global_loglik = ifelse(test = est_method == "global", global_LL, NA), # Only valid if est_method = "global"
+    logLik        = list(loglik        = LL, # Final logLik of the model (its meaning depends on argument "sam_method")
+                         global_loglik = ifelse(test = sam_method == "global", global_LL, NA), # Only valid if sam_method = "global"
                          loglik_gksw   = loglik_gksw, # Weighted logLik per group-cluster combinations
                          runs_loglik   = loglik_nstarts, # loglik for each start
                          obs_loglik    = Obs.LL), # Only useful if fit = "local"

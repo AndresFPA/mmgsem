@@ -6,10 +6,10 @@
 #' INPUT: Arguments required by the function
 #' @param clusters Vector of length two, indicating the minimal and maximal number of clusters. Used for the model selection.
 #' @param dat Observed data of interest for the MMGSEM model.
-#' @param step1model Measurement model (MM). Used in step 1. Must be a string (like in lavaan). 
-#'                   Can be a list of strings determing the number of measurement blocks (e.g., one string for the MM of 
+#' @param S1 Measurement model (MM). Used in step 1. Must be a string (like in lavaan). 
+#'                   Can be a list of strings determining the number of measurement blocks (e.g., one string for the MM of 
 #'                   factor 1, and a second string for the MM of factor 2)  
-#' @param step2model Structural model. Used in step 2. Must be a string (like in lavaan).
+#' @param S2 Structural model. Used in step 2. Must be a string (like in lavaan).
 #' @param group Name of the group variable. Must be a string.
 #' @param seed Pre-defined seed for the random start in case a replication is needed in the future.
 #' @param userStart Pre-defined start provided by the user. Must be a matrix of dimensions ngroups*nclus.
@@ -25,19 +25,27 @@
 #'                             [5,]    0    1
 #'                             [6,]    0    1
 #'
-#' @param s1out Resulting lavaan object from a cfa() analysis. Can be used to directly input the results from the step 1
+#' @param s1_fit Resulting lavaan object from a cfa() analysis. Can be used to directly input the results from the step 1
 #'              if the user only wants to use MMGSEM() to estimate the structural model (Step 2). If not NULL, MMGSEM()
-#'              will skip the estimation of Step 1 and use the s1out object as the input for Step 2.
+#'              will skip the estimation of Step 1 and use the s1out object as the input for Step 2. If NULL, MMGSEM() will
+#'              estimate both step 1 and step 2.
 #' @param max_it Maximum number of iterations for each start.
 #' @param nstarts Number of random starts that will be performed (in an attempt to avoid local maxima).
 #' @param partition Type of random partition used to start the EM algorithm. Can be "hard" and "soft".
 #' @param constraints String containing the constrains of the model. Receives the same input as group.equal in lavaan.
 #' @param NonInv String containing the non-invariances of the model. Similar to group.partial in lavaan.
-#' @param Endo2Cov TRUE or FALSE argument to determine whether to allow or not covariance between endogenous 2 variables.
-#'                 If TRUE (the default), the covariance between endogenous factors is allowed.
-#' @param allG TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
-#'             By default, is TRUE.
-#' @param fit String argument. Either "factors" or "observed". Determines which loglikelihood will be used to fit the model.
+#' @param endogenous_cov TRUE or FALSE argument to determine whether to allow or not covariance between purely endogeonus variables.
+#'                       If TRUE (the default), the covariance between endogenous factors is allowed.
+#' @param endo_group_specific TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
+#'                            By default, it is TRUE.
+#' @param sam_method either "local" or "global. Follows local and global approaches from the SAM method. GLOBAL NOT FUNCTIONAL YET.
+#' @param rescaling Only used when data is ordered. By default, MMGSEM uses the marker variable scaling approach. But identification
+#'                  constraints with ordinal data (by default) are handled by standardizing the factors' variance in the first step. 
+#'                  The rescaling argument (either T or F) rescales the factor variances and loadings to the marker variable scaling
+#'                  before running step 2. It is set to T by default (rescaling happens). If set to F, the factor variances are kept fixed to 1.
+#' @param ... MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
+#'            and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables, 
+#'            group.equal for constraints, group.partial for non-invariances, etc.
 #'
 #' OUTPUT: The function will return a list with the following results:
 #' @return z_gks: Posterior classification probabilities or cluster memberships (ngroups*nclus matrix).
@@ -51,13 +59,16 @@
 #' @return Obs_loglik: Reconstruction of the observed loglikelihood after the model has converged. Only valid when
 #'                     fit is "factors".
 #'
-#' PLEASE NOTE: This function requires 'lavaan' package to work. It also requires the function 'EStep.R'.
+#' PLEASE NOTE: This function requires 'lavaan' package to work.
 #' @export
-ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
-                           group, clusters, seed = NULL, userStart = NULL, s1out = NULL,
+ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
+                           group, clusters, seed = NULL, 
+                           userStart = NULL, s1_fit = NULL,
                            max_it = 10000L, nstarts = 20L, printing = FALSE,
-                           partition = "hard", NonInv = NULL, constraints = "loadings",
-                           Endo2Cov = TRUE, allG = TRUE, fit = "factors", est_method = "local") {
+                           partition = "hard", endogenous_cov = TRUE, 
+                           endo_group_specific = TRUE,
+                           sam_method = "local", meanstr = FALSE,   
+                           rescaling = F, ...) {
   
   # Prepare objects to compare in model selection
   nmodels   <- length(clusters[1]:clusters[2])
@@ -83,30 +94,27 @@ ModelSelection <- function(dat, step1model = NULL, step2model = NULL,
   # Call MMGSEM using the arguments provided by the user k times (one per required model)
   for(k in clusters[1]:clusters[2]){
     # If the user provides output of the first step (s1out), use it for all models
-    if(!is.null(s1out)){
-      model_fit[[k]] <- MMGSEM(dat = dat, step1model = step1model, step2model = step2model, 
-                               group = group, nclus = k, seed = seed, userStart = userStart, 
-                               s1out = s1out, max_it = max_it, nstarts = nstarts, printing = printing, 
-                               partition = partition, NonInv = NonInv, constraints = constraints, 
-                               Endo2Cov = Endo2Cov, allG = allG, fit = fit, est_method = est_method)
-    } else if (is.null(s1out)){
+    if(!is.null(s1_fit)){
+      model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed, 
+                               userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing, 
+                               partition = partition, endogenous_cov = endogenous_cov, 
+                               endo_group_specific = endo_group_specific, sam_method = sam_method)
+    } else if (is.null(s1_fit)){
       # browser()
       if(k == clusters[1]){
-        model_fit[[k]] <- MMGSEM(dat = dat, step1model = step1model, step2model = step2model, 
-                                 group = group, nclus = k, seed = seed, userStart = userStart, 
-                                 s1out = NULL, max_it = max_it, nstarts = nstarts, printing = printing, 
-                                 partition = partition, NonInv = NonInv, constraints = constraints, 
-                                 Endo2Cov = Endo2Cov, allG = allG, fit = fit, est_method = est_method)
+        model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed, 
+                                 userStart = userStart, s1_fit = NULL, max_it = max_it, nstarts = nstarts, printing = printing, 
+                                 partition = partition, endogenous_cov = endogenous_cov, 
+                                 endo_group_specific = endo_group_specific, sam_method = sam_method)
         
         # Save the covariance matrix of step 1, so we do not run it for all models (it is the same for all of them).
         s1output <- model_fit[[k]]$MM
       } else {
         # browser()
-        model_fit[[k]] <- MMGSEM(dat = dat, step1model = step1model, step2model = step2model, 
-                                 group = group, nclus = k, seed = seed, userStart = userStart, 
-                                 s1out = s1output, max_it = max_it, nstarts = nstarts, printing = printing, 
-                                 partition = partition, NonInv = NonInv, constraints = constraints, 
-                                 Endo2Cov = Endo2Cov, allG = allG, fit = fit, est_method = est_method)
+        model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed, 
+                                 userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing, 
+                                 partition = partition, endogenous_cov = endogenous_cov, 
+                                 endo_group_specific = endo_group_specific, sam_method = sam_method)
       }
       print(paste("model", k, "finished"))
     }
