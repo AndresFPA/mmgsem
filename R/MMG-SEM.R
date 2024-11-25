@@ -1401,8 +1401,8 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
 
       # Get the covariance of the factors (cov_eta)
       # First, get biased sample covariance matrix per group (S)
-      S <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]] # Deprecated, S is now directly extracted from lavaan
-      cov_eta[[g]] <- M_mat[[g]] %*% (S[[g]] - theta_g) %*% t(M_mat[[g]])
+      S <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
+      cov_eta[[g]] <- M_mat[[g]] %*% (S - theta_g) %*% t(M_mat[[g]])
     }
   } else if (!is.list(S1)) {
     # If not a list, then we only have one measurement block (all latent variables at the same time)
