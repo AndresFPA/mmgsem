@@ -255,7 +255,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
     return(x)
   }
-
+  # browser()
   # Do a fake sem() to obtain the correct settings to use in Step 2
   # just a single sample cov!
   fake <- lavaan::sem(
@@ -1326,6 +1326,7 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
     if (!is.null(s1_fit)) {
       # If the user inputs their own step 1 results, use it
       S1output <- s1_fit
+      # S <- S1output@SampleStats@cov
     } else if (is.null(s1_fit)) {
       # If not, estimate step 1 using cfa()
       S1output <- vector(mode = "list", length = length(S1))
@@ -1400,8 +1401,8 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
 
       # Get the covariance of the factors (cov_eta)
       # First, get biased sample covariance matrix per group (S)
-      S <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
-      cov_eta[[g]] <- M_mat[[g]] %*% (S - theta_g) %*% t(M_mat[[g]])
+      S <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]] # Deprecated, S is now directly extracted from lavaan
+      cov_eta[[g]] <- M_mat[[g]] %*% (S[[g]] - theta_g) %*% t(M_mat[[g]])
     }
   } else if (!is.list(S1)) {
     # If not a list, then we only have one measurement block (all latent variables at the same time)
