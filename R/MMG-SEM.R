@@ -78,6 +78,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   noninv      <- dots_args$group.partial
   ordered     <- dots_args$ordered; if(is.null(ordered)){ordered <- F}
   std.lv      <- dots_args$std.lv;  if(is.null(std.lv)){std.lv <- F}
+  missing     <- dots_args$missing; if(is.null(missing)){missing <- "listwise"}
 
   # Add a warning in case there is a pre-defined start and the user also requires a multi-start
   if (!(is.null(userStart)) && nstarts > 1) {
@@ -145,12 +146,14 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       group.sizes <- tabulate(group.idx)
       group.means <- rowsum.default(as.matrix(dat[, vars]),
                                     group = group.idx, reorder = FALSE,
-                                    na.rm = FALSE
+                                    na.rm = TRUE # For listwise deletion
       ) / group.sizes
       centered[, vars] <- dat[, vars] - group.means[group.idx, , drop = FALSE]
     }
   }
 
+  if(missing == "fiml"){centered <- dat} # If we want to deal with the missing data using fiml, we cannot center the data
+  # Centering the data requires the group means, which are dependent on possible NAs
 
   # Get sample covariance matrix per group (used later)
   S_unbiased <- lapply(X = unique(centered[, group]), FUN = function(x) {
@@ -1317,6 +1320,20 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
 Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
                   group = group, S_unbiased = S_unbiased, ...){
+
+  # Get the sample covariance matrix from a lavaan dummy object
+  # This helps to avoid any inconsistency (e.g., missing data) if the user provides their own s1output
+  s1_dummy <- lavaan::cfa(
+    model = S1, data = centered, group = group,
+    se = "none", test = "none",
+    baseline = FALSE, h1 = FALSE,
+    implied = FALSE, loglik = FALSE,
+    do.fit = FALSE,
+    ...
+  )
+
+  S_biased <- s1_dummy@SampleStats@cov
+
   # Step 1: Get group-specific factor covariances
   # Perform Step 1 according to the number of measurement blocks
 
@@ -1401,8 +1418,8 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
 
       # Get the covariance of the factors (cov_eta)
       # First, get biased sample covariance matrix per group (S)
-      S <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
-      cov_eta[[g]] <- M_mat[[g]] %*% (S - theta_g) %*% t(M_mat[[g]])
+      # S <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]] # Deprecated (now we get the covariance from a dummy object)
+      cov_eta[[g]] <- M_mat[[g]] %*% (S_biased[[g]] - theta_g) %*% t(M_mat[[g]])
     }
   } else if (!is.list(S1)) {
     # If not a list, then we only have one measurement block (all latent variables at the same time)
@@ -1431,9 +1448,9 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
     cov_eta   <- lapply(EST, "[[", "psi") # cov_eta name refers to Variance of eta (eta being the latent variables)
   }
 
-  # Biased cov matrix
-  S_biased <- vector(mode = "list", length = ngroups)
-  for(g in 1:ngroups){S_biased[[g]] <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]}
+  # Biased cov matrix # Deprecated (now we get the covariance from a dummy object)
+  # S_biased <- vector(mode = "list", length = ngroups)
+  # for(g in 1:ngroups){S_biased[[g]] <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]}
 
   # Return all the useful objects
   return(list(
