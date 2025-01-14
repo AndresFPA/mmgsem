@@ -1323,8 +1323,12 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
 
   # Get the sample covariance matrix from a lavaan dummy object
   # This helps to avoid any inconsistency (e.g., missing data) if the user provides their own s1output
+  # Get a valid model for the dummy object in case of measurement blocks
+  model_dummy <- S1
+  if(is.list(S1)){model_dummy <- unlist(S1)}
+
   s1_dummy <- lavaan::cfa(
-    model = S1, data = centered, group = group,
+    model = model_dummy, data = centered, group = group,
     se = "none", test = "none",
     baseline = FALSE, h1 = FALSE,
     implied = FALSE, loglik = FALSE,
