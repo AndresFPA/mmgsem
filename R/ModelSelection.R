@@ -6,9 +6,9 @@
 #' INPUT: Arguments required by the function
 #' @param clusters Vector of length two, indicating the minimal and maximal number of clusters. Used for the model selection.
 #' @param dat Observed data of interest for the MMGSEM model.
-#' @param S1 Measurement model (MM). Used in step 1. Must be a string (like in lavaan). 
-#'                   Can be a list of strings determining the number of measurement blocks (e.g., one string for the MM of 
-#'                   factor 1, and a second string for the MM of factor 2)  
+#' @param S1 Measurement model (MM). Used in step 1. Must be a string (like in lavaan).
+#'                   Can be a list of strings determining the number of measurement blocks (e.g., one string for the MM of
+#'                   factor 1, and a second string for the MM of factor 2)
 #' @param S2 Structural model. Used in step 2. Must be a string (like in lavaan).
 #' @param group Name of the group variable. Must be a string.
 #' @param seed Pre-defined seed for the random start in case a replication is needed in the future.
@@ -40,11 +40,11 @@
 #'                            By default, it is TRUE.
 #' @param sam_method either "local" or "global. Follows local and global approaches from the SAM method. GLOBAL NOT FUNCTIONAL YET.
 #' @param rescaling Only used when data is ordered. By default, MMGSEM uses the marker variable scaling approach. But identification
-#'                  constraints with ordinal data (by default) are handled by standardizing the factors' variance in the first step. 
+#'                  constraints with ordinal data (by default) are handled by standardizing the factors' variance in the first step.
 #'                  The rescaling argument (either T or F) rescales the factor variances and loadings to the marker variable scaling
 #'                  before running step 2. It is set to T by default (rescaling happens). If set to F, the factor variances are kept fixed to 1.
 #' @param ... MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
-#'            and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables, 
+#'            and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables,
 #'            group.equal for constraints, group.partial for non-invariances, etc.
 #'
 #' OUTPUT: The function will return a list with the following results:
@@ -62,14 +62,14 @@
 #' PLEASE NOTE: This function requires 'lavaan' package to work.
 #' @export
 ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
-                           group, clusters, seed = NULL, 
+                           group, clusters, seed = NULL,
                            userStart = NULL, s1_fit = NULL,
                            max_it = 10000L, nstarts = 20L, printing = FALSE,
-                           partition = "hard", endogenous_cov = TRUE, 
+                           partition = "hard", endogenous_cov = TRUE,
                            endo_group_specific = TRUE,
-                           sam_method = "local", meanstr = FALSE,   
+                           sam_method = "local", meanstr = FALSE,
                            rescaling = F, ...) {
-  
+
   # Prepare objects to compare in model selection
   nmodels   <- length(clusters[1]:clusters[2])
   nclus     <- clusters[1]:clusters[2]
@@ -89,32 +89,32 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
   nrpar     <- vector(mode = "list", length = nmodels)
   nrpar_fac <- vector(mode = "list", length = nmodels)
   R2entropy <- vector(mode = "list", length = nmodels)
-  
-  
+
+
   # Call MMGSEM using the arguments provided by the user k times (one per required model)
   for(k in clusters[1]:clusters[2]){
     # If the user provides output of the first step (s1out), use it for all models
     if(!is.null(s1_fit)){
-      model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed, 
-                               userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing, 
-                               partition = partition, endogenous_cov = endogenous_cov, 
-                               endo_group_specific = endo_group_specific, sam_method = sam_method)
+      model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
+                               userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing,
+                               partition = partition, endogenous_cov = endogenous_cov,
+                               endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
     } else if (is.null(s1_fit)){
       # browser()
       if(k == clusters[1]){
-        model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed, 
-                                 userStart = userStart, s1_fit = NULL, max_it = max_it, nstarts = nstarts, printing = printing, 
-                                 partition = partition, endogenous_cov = endogenous_cov, 
-                                 endo_group_specific = endo_group_specific, sam_method = sam_method)
-        
+        model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
+                                 userStart = userStart, s1_fit = NULL, max_it = max_it, nstarts = nstarts, printing = printing,
+                                 partition = partition, endogenous_cov = endogenous_cov,
+                                 endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
+
         # Save the covariance matrix of step 1, so we do not run it for all models (it is the same for all of them).
-        s1output <- model_fit[[k]]$MM
+        s1_fit <- model_fit[[k]]$MM
       } else {
         # browser()
-        model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed, 
-                                 userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing, 
-                                 partition = partition, endogenous_cov = endogenous_cov, 
-                                 endo_group_specific = endo_group_specific, sam_method = sam_method)
+        model_fit[[k]] <- MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
+                                 userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing,
+                                 partition = partition, endogenous_cov = endogenous_cov,
+                                 endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
       }
       print(paste("model", k, "finished"))
     }
@@ -134,17 +134,17 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
     LL_fac[[k]]    <- model_fit[[k]]$logLik$loglik
     nrpar[[k]]     <- model_fit[[k]]$NrPar$Obs.nrpar
     nrpar_fac[[k]] <- model_fit[[k]]$NrPar$Fac.nrpar
-    
+
   } # For loop ends here
   # browser()
   # Also do CHull
   Chull_res      <- CHull(loglik = unlist(LL), nrpar = unlist(nrpar), nsclust = clusters)
   Chull_res_fac  <- CHull(loglik = unlist(LL_fac), nrpar = unlist(nrpar_fac), nsclust = clusters)
-  
+
   # Chull function already returns a matrix with LL and nrpar. Use it as a base for the rest of the results
   # browser()
   overview <- cbind(unlist(R2entropy),
-                    Chull_res, 
+                    Chull_res,
                     unlist(BIC_G), unlist(BIC_N),
                     unlist(AIC),
                     unlist(AIC3),
@@ -155,14 +155,14 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
                     unlist(AIC3_fac),
                     unlist(ICL_fac)
                     )
-  
+
   colnames(overview) <- c("R2entropy", "Clusters",
                           "LL", "nrpar", "Chull", "BIC_G", "BIC_N", "AIC", "AIC3", "ICL",
                           "LL_fac", "nrpar_fac", "Chull_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac", "AIC3_fac", "ICL_fac")
-  
+
   overview <- as.data.frame(overview)
-  
-  return(list(Overview = overview, 
+
+  return(list(Overview = overview,
               Models   = model_fit)
          )
 }
@@ -173,7 +173,7 @@ CHull <- function(loglik, nrpar, nsclust){
     Clus <- seq(nsclust[1], nsclust[2])
     fitMat <- matrix(data = c(Clus, loglik, nrpar), ncol = 3)
     k <- nrow(fitMat)
-    
+
     screeratios <- matrix(NA, nsclust[2] - nsclust[1] + 1, 1)
     CHullcheck <- 0
     for(nclust in (nsclust[1] + 1):(nsclust[2] - 1)){
