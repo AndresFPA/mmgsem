@@ -1154,7 +1154,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   for (k in 1:nclus) {
     ifelse(test = (nclus == 1), yes = (beta <- beta_ks), no = (beta <- beta_ks[[k]]))
     for (g in 1:ngroups) {
-      S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
+      # S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]] # Deprecated, we already have S_biased
       var_eta <- solve(I - beta) %*% psi_gks[[g, k]] %*% t(solve(I - beta))
       Sigma_gks[[g, k]] <- lambda_gs[[g]] %*% var_eta %*% t(lambda_gs[[g]]) + theta_gs[[g]]
       Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
@@ -1163,9 +1163,9 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
         sample.mean = rep(0, length(vars)),
         sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
         # sample.nobs = N_gks[g, k],
-        sample.cov  = S_biased, # Item (observed) covariance matrix from step 1
+        sample.cov  = S_biased[[g]], # Item (observed) covariance matrix from step 1
         Mu          = rep(0, length(vars)),
-        Sigma       = Sigma_gks[[g, k]] # Item (observed) covariance matrix from step 2
+        Sigma       = Sigma_gks[[g, k]] # Item (observed) model-implied covariance matrix including step 2
       )
 
       Obs.loglik_gks[g, k] <- Obs.loglik_gk
