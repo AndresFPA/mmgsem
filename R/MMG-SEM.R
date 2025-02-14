@@ -200,8 +200,9 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   # Initialize objects to store results per random start.
 
   results_nstarts <- vector(mode = "list", length = nstarts)
-  z_gks_nstarts <- vector(mode = "list", length = nstarts) # z_gks refer to posteriors
-  loglik_nstarts <- numeric(nstarts)
+  z_gks_nstarts   <- vector(mode = "list", length = nstarts) # z_gks refer to posteriors
+  loglik_nstarts  <- numeric(nstarts)
+  iter_nstarts    <- numeric(nstarts)
 
   # Start using a pre-defined seed for the random partitions
   if (!is.null(seed)) {
@@ -711,12 +712,14 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
     }
 
     results_nstarts[[s]] <- s2out
-    z_gks_nstarts[[s]] <- z_gks
-    loglik_nstarts[s] <- LL
+    z_gks_nstarts[[s]]   <- z_gks
+    loglik_nstarts[s]    <- LL
+    iter_nstarts[s]      <- i
   } # multistart
 
   # Get best fit and z_gks based on the loglikelihood
   best_idx <- which.max(loglik_nstarts)
+  iter     <- iter_nstarts[best_idx]
   s2out    <- results_nstarts[[best_idx]]
   LL       <- loglik_nstarts[best_idx]
   z_gks    <- z_gks_nstarts[[best_idx]]
@@ -1311,7 +1314,11 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
                          ICL        = list(observed = Obs.ICL, Factors = ICL)),
     sample.stats  = list(S = S_unbiased, n_cov_exo = n_cov_exo),
     NrPar         = list(Obs.nrpar = nr_pars, Fac.nrpar = nr_par_factors),
-    N_gs          = N_gs
+    N_gs          = N_gs,
+    nstarts       = nstarts,
+    ngroups       = ngroups,
+    sam_method    = sam_method,
+    iterations    = iter
   ))
 }
 
