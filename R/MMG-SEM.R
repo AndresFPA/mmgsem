@@ -102,6 +102,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   }
 
   # Change the syntax of the model in step 1 if the data is ordered
+  s1ori <- NULL # Initialize s1ori object (necessary as input for Step2 function)
+
   if(ordered == T){
     # Save original syntax for later code
     s1ori <- S1
@@ -163,8 +165,11 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   ## STEP 1 - MMG-SEM ----------------------------------------------------------------------------------------
   # Save the measurement model results
   # Call function to run Step 1 of MMG-SEM (estimates CFA)
-  Step1_args <- list(S1 = S1, s1_fit = s1_fit, centered = centered,
-                     group = group, S_unbiased = S_unbiased)
+  Step1_args <- list(S1         = S1,
+                     s1_fit     = s1_fit,
+                     centered   = centered,
+                     group      = group,
+                     S_unbiased = S_unbiased)
   Step1_args <- c(dots_args, Step1_args)
   MM <- do.call(what = Step1, args = Step1_args)
 
@@ -196,526 +201,40 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   }
 
   # STEP 2 (EM algorithm for model estimation) -----------------------------------------------------
-  # We perform a MULTI-START procedure to avoid local maxima.
-  # Initialize objects to store results per random start.
+  SM <- Step2(ngroups             = ngroups,
+              nclus               = nclus,
+              nstarts             = nstarts,
+              N_gs                = N_gs,
+              seed                = seed,
+              max_it              = max_it,
+              cov_eta             = cov_eta,
+              dat                 = dat,
+              S2                  = S2,
+              lat_var             = lat_var,
+              ordered             = ordered,
+              endo_group_specific = endo_group_specific,
+              endogenous_cov      = endogenous_cov,
+              lambda_gs           = lambda_gs,
+              theta_gs            = theta_gs,
+              S_unbiased          = S_unbiased,
+              S1                  = S1,
+              std.lv              = std.lv,
+              partition           = partition,
+              userStart           = userStart,
+              printing            = printing,
+              s1ori               = s1ori)
 
-  results_nstarts <- vector(mode = "list", length = nstarts)
-  z_gks_nstarts   <- vector(mode = "list", length = nstarts) # z_gks refer to posteriors
-  loglik_nstarts  <- numeric(nstarts)
-  iter_nstarts    <- numeric(nstarts)
-
-  # Start using a pre-defined seed for the random partitions
-  if (!is.null(seed)) {
-    set.seed(seed)
-  }
-
-  # Create a function to reorder matrices (used later). Done due to:
-  # (1) It allows us to organize the matrices in an easier to understand order. Exogenous variables first, and endogeonus later.
-  # (2) Used to make sure we are multiplying matrices in the correct way
-
-  # Re-order for factors
-  reorder <- function(x) {
-    x <- x[c(exog, endog), c(exog, endog)]
-    return(x)
-  }
-
-  # Re-order for measurement model matrices (observed variables must be in the same order as the factors)
-  if(ordered == T){S1 <- s1ori} # Recover original syntax for correct reordering
-  reorder_obs <- function(x, matrix) {
-    # Re-write model
-    # Split into lines
-    lines_model <- unlist(strsplit(unlist(S1), "\n"))
-    rewritten <- c()
-    # browser()
-    # Extract the observed variable names per factor
-    # Exogenous factors
-    for (i in 1:length(exog)) {
-      rewritten <- c(rewritten, lines_model[grepl(exog[i], lines_model)])
-    }
-
-    # Endogenous 1 factors
-    if(length(endog1 > 0)){
-      for (i in 1:length(endog1)) {
-        rewritten <- c(rewritten, lines_model[grepl(endog1[i], lines_model)])
-      }
-    }
-
-    # Endogenous 2 factors
-    for (i in 1:length(endog2)) {
-      rewritten <- c(rewritten, lines_model[grepl(endog2[i], lines_model)])
-    }
-
-    # Run fake measur_model
-    fake_measur  <- lavaan::cfa(model = rewritten, data = dat, do.fit = F)
-    correct_vars <- lavNames(fake_measur)
-
-    if (matrix == "lambda") {
-      # Reorder lambda
-      x <- x[correct_vars, c(exog, endog)]
-    } else if (matrix == "theta") {
-      # Reorder theta
-      x <- x[correct_vars, correct_vars]
-    }
-
-    return(x)
-  }
-  # browser()
-  # Do a fake sem() to obtain the correct settings to use in Step 2
-  # just a single sample cov!
-  fake <- lavaan::sem(
-    model = S2, sample.cov = rep(cov_eta[1], nclus),
-    sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
-    baseline = FALSE,
-    h1 = FALSE, check.post = FALSE,
-    loglik = FALSE,
-    sample.cov.rescale = FALSE,
-    fixed.x = TRUE,
-    information = "observed"
-  )
-  FakeprTbl <- parTable(fake)
-  fake@Options$do.fit <- TRUE
-  fake@Options$se     <- "none"
-  fake@ParTable$start <- NULL
-  fake@ParTable$est   <- NULL
-  fake@ParTable$se    <- NULL
-  fake@Options$start  <- "default"
-
-  # Get the labels of the endogenous 1 and 2 factors
-  endog1 <- lat_var[(lat_var %in% FakeprTbl$rhs[which(FakeprTbl$op == "~")]) &
-                      (lat_var %in% FakeprTbl$lhs[which(FakeprTbl$op == "~")])]
-  endog2 <- lat_var[!c(lat_var %in% FakeprTbl$rhs[which(FakeprTbl$op == "~")]) &
-                      (lat_var %in% FakeprTbl$lhs[which(FakeprTbl$op == "~")])]
-  endog <- c(endog1, endog2)
-  exog <- lat_var[!c(lat_var %in% endog)]
-
-  # endog2 <- lavNames(fake, "ov.y")
-  # endog1 <- lavNames(fake, "eqs.y")
-  # both.idx <- which(endog1 %in% endog2)
-  # if (length(both.idx) > 0L) {
-  #   endog1 <- endog1[-both.idx]
-  # }
-  # endog <- c(endog1, endog2)
-  # exog <- lavNames(fake, "lv")[!c(lavNames(fake, "lv") %in% endog)]
-
-  # Do a fake model per endo LV (to avoid bias due to reconstruction of group-specific endo variances). For more info, please see the Appendix of the paper related to this code.
-  # Please note that the index "lv" is used to identify each model per endo LV
-  # Please also note that this is used AFTER the first iteration. In the first iteration we start with only one model
-  fake_lv  <- vector(mode = "list", length = length(endog))
-  prTbl_lv <- vector(mode = "list", length = length(endog))
-
-  for (lv in 1:length(endog)) {
-
-    # Create a parameter table per endogenous latent variables
-    # Select the current latent variable
-    this_lv <- endog[endog %in% endog[lv]]
-    # browser()
-    # Keep the (co)variances of the other latent variables and (if global) the measurement parameters
-    var_not_this_lv <- which(FakeprTbl$lhs != this_lv & FakeprTbl$op == "~~") # keeps lv covariances and obs res variances
-    fac_load        <- which(FakeprTbl$lhs != this_lv & FakeprTbl$op == "=~") # Factor load of other factors
-
-    # Get the new parameter table per endogenous latent variable
-    prTbl_idx       <- c(which(FakeprTbl$lhs == this_lv), fac_load, var_not_this_lv)
-    prTbl_idx       <- sort(prTbl_idx)
-    prTbl_lv[[lv]]  <- FakeprTbl[prTbl_idx, ]
-
-    # Run the model per endo latent variable
-    fake_lv[[lv]] <- lavaan::sem(
-      model = prTbl_lv[[lv]], sample.cov = rep(cov_eta[1], nclus),
-      sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
-      baseline = FALSE,
-      h1 = FALSE, check.post = FALSE,
-      loglik = FALSE,
-      sample.cov.rescale = FALSE,
-      fixed.x = TRUE,
-      information = "observed"
-    )
-
-    fake_lv[[lv]]@Options$do.fit <- TRUE
-    fake_lv[[lv]]@Options$se     <- "none"
-    fake_lv[[lv]]@ParTable$start <- NULL
-    fake_lv[[lv]]@ParTable$est   <- NULL
-    fake_lv[[lv]]@ParTable$se    <- NULL
-    fake_lv[[lv]]@Options$start  <- "default"
-  }
-
-  # Re-order (order of columns and rows) cov_eta to make sure later computations are comparing correct matrices
-  cov_eta <- lapply(1:ngroups, function(x) {
-    reorder(cov_eta[[x]])
-  })
-  lambda_gs <- lapply(1:ngroups, function(x) {
-    reorder_obs(lambda_gs[[x]], matrix = "lambda")
-  })
-  theta_gs <- lapply(1:ngroups, function(x) {
-    reorder_obs(theta_gs[[x]], matrix = "theta")
-  })
-  S_unbiased <- lapply(1:ngroups, function(x) {
-    reorder_obs(S_unbiased[[x]], matrix = "theta")
-  })
-
-  # Multi-start
-  for (s in 1:nstarts) {
-    if (printing == T) {
-      print(paste("Start", s, "-----------------"))
-    }
-
-    # Random Start
-    if (!is.null(userStart)) {
-      # In case the user inputs a pre-defined start, use it for z_gks
-      z_gks <- userStart
-    } else if (partition == "hard") {
-      # Create initial random partition. Hard partition. (z_gks)
-      cl <- 0
-      while (cl < 1) { # "while loop" to make sure all clusters get at least one group
-        z_gks <- t(replicate(ngroups, sample(x = c(rep(0, (nclus - 1)), 1))))
-        cl <- min(colSums(z_gks))
-      }
-    } else if (partition == "soft") {
-      z_gks <- matrix(data = runif(n = c(nclus * ngroups)), ncol = nclus, nrow = ngroups)
-      z_gks <- z_gks / rowSums(z_gks)
-    }
-
-    # Initialize psi_gks
-    psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
-
-    # Initialize weighted z_gks (weighted for each endo LV)
-    # Done to avoid bias - NOT NECESSARY in the first iteration
-    z_gks_lv <- vector(mode = "list", length = length(endog))
-    for (lv in 1:length(endog)) {
-      z_gks_lv[[lv]] <- matrix(data = NA, ncol = nclus, nrow = ngroups)
-    }
-
-    # Prepare objects for the while loop
-    i <- 0 # iteration initialization
-    prev_LL <- 0 # previous loglikelihood initialization
-    diff_LL <- 1 # Set a diff of 1 just to start the while loop
-    log_test <- T # TEMPORARY - To check if there is decreasing loglikelihood
-
-    # Run full-convergence multi-start
-    while (diff_LL > 1e-6 & i < max_it & isTRUE(log_test)) {
-      i <- i + 1
-      pi_ks <- colMeans(z_gks) # Prior probabilities
-      N_gks <- z_gks * N_gs # Sample size per group-cluster combination
-      # N_gks <- as.vector(N_gks)
-
-      # Weight posteriors for each endogenous factor - Not necessary in the first iteration
-      # To avoid bias when endo_group_specific == T. That is, when the endogenous variances are group-specific
-      if (isTRUE(endo_group_specific) & i > 1) {
-        for (lv in 1:length(endog)) {
-          for (k in 1:nclus) {
-            for (g in 1:ngroups) {
-              # Correct bias by dividing by the correct endo LV
-              z_gks_lv[[lv]][g, k] <- z_gks[g, k] / psi_gks[[g, k]][endog[lv], endog[lv]]
-            }
-          }
-        }
-      }
-
-      # M-Step ---------
-
-      # Trick to avoid slow multi-group estimation
-      # Get a weighted averaged covariance matrix for each cluster
-      if (isFALSE(endo_group_specific) | i == 1) {
-
-        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
-        # For the first iteration there is no weighted z_gks
-        COV <- vector("list", length = nclus)
-
-        for (k in 1:nclus) {
-          # create 'averaged' sample cov for this cluster
-          this_nobs <- z_gks[, k] * N_gs
-          this_w <- this_nobs / sum(this_nobs)
-          tmp <- lapply(seq_along(cov_eta), function(g) {
-            cov_eta[[g]] * this_w[g]
-          })
-          COV[[k]] <- Reduce("+", tmp)
-          # COV[[k]] <- 0.5 * (COV[[k]] + t(COV[[k]])) # Force the matrix to be symmetric
-        }
-      } else if (i > 1) {
-
-        # After the first iteration
-        # Get one weighted cluster-specific COV per endo LV
-        COV_lv <- vector("list", length = length(endog))
-        for (lv in 1:length(endog)) {
-          COV_lv[[lv]] <- vector("list", length = nclus)
-        }
-
-        for (lv in 1:length(endog)) {
-          for (k in 1:nclus) {
-            # create 'averaged' sample cov for this cluster
-            this_nobs <- z_gks_lv[[lv]][, k] * N_gs
-            this_w <- this_nobs / sum(this_nobs)
-            tmp <- lapply(seq_along(cov_eta), function(g) {
-              cov_eta[[g]] * this_w[g]
-            })
-            COV_lv[[lv]][[k]] <- Reduce("+", tmp)
-            # COV_lv[[lv]][[k]] <- 0.5 * (COV_lv[[lv]][[k]] + t(COV_lv[[lv]][[k]])) # Force symmetry
-          }
-        }
-      }
-
-      # PARAMETER ESTIMATION
-      # Call lavaan to estimate the structural parameters
-      # the 'groups' are the clusters
-      # Note: this makes all resulting parameters to be cluster-specific (it is reconstructed later)
-
-      if (isFALSE(endo_group_specific) | i == 1) {
-        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
-        # For the first iteration, perform the full structural model estimation
-        s2out <- lavaan::lavaan(
-          slotOptions       = fake@Options,
-          slotParTable      = fake@ParTable,
-          sample.cov        = COV,
-          sample.nobs       = rep(nrow(dat), nclus),
-          # slotModel       = slotModel,
-          # slotData        = fake@Data,
-          # slotSampleStats = fake@SampleStats
-        )
-      } else if (i > 1) {
-        # After the first iteration
-        # Run structural estimation once per endo LV
-        s2out <- vector(mode = "list", length = length(endog))
-        for (lv in 1:length(endog)) {
-          s2out[[lv]] <- lavaan(
-            slotOptions       = fake_lv[[lv]]@Options,
-            slotParTable      = fake_lv[[lv]]@ParTable,
-            sample.cov        = COV_lv[[lv]],
-            sample.nobs       = rep(nrow(dat), nclus)
-            # slotModel       = slotModel,
-            # slotData        = fake@Data,
-            # slotSampleStats = fake@SampleStats
-          )
-        }
-      }
-
-
-      # start <- partable(s2out)$est
-
-      # compute loglikelihood for all group/cluster combinations
-      # Initialize matrices to store loglikelihoods
-      loglik_gks  <- matrix(data = 0, nrow = ngroups, ncol = nclus)
-      loglik_gksw <- matrix(data = 0, nrow = ngroups, ncol = nclus)
-      gk <- 0
-
-      # Prepare Sigma
-      # Initialize the object for estimating Sigma
-      Sigma <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
-      I <- diag(length(lat_var)) # Identity matrix based on number of latent variables. Used later
-
-      # Extract cluster-specific parameters from step 2
-      if (isFALSE(endo_group_specific) | i == 1) {
-        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
-        # In iteration one, there is only model (s2out) from which we extract the parameters.
-        if (nclus == 1) {
-          EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
-          beta_ks <- EST_s2[["beta"]]
-          psi_ks  <- EST_s2[["psi"]]
-        } else if (nclus != 1) {
-          EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
-          beta_ks <- lapply(EST_s2, "[[", "beta") # Does not work with only one cluster
-          psi_ks  <- lapply(EST_s2, "[[", "psi")
-        }
-
-        # Re order for correct comparisons
-        if (nclus == 1) {
-          beta_ks <- reorder(beta_ks)
-          psi_ks <- reorder(psi_ks)
-        } else if (nclus != 1) {
-          beta_ks <- lapply(1:nclus, function(x) {
-            reorder(beta_ks[[x]])
-          }) # Does not work with only one cluster
-          psi_ks <- lapply(1:nclus, function(x) {
-            reorder(psi_ks[[x]])
-          })
-        }
-      } else if (i > 1) {
-        # After iteration 1 we have several models (s2out[[lv]]) from which we extract the parameters
-        # Extract the beta matrices per model (one per endo LV)
-        # Initialize lists to store the parameters
-        EST_s2_lv  <- vector(mode = "list", length = length(endog))
-        beta_ks_lv <- vector(mode = "list", length = length(endog))
-        psi_ks_lv  <- vector(mode = "list", length = length(endog))
-        for (lv in 1:length(endog)) {
-          if (nclus == 1) {
-            EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
-            beta_ks_lv[[lv]] <- EST_s2_lv[[lv]][["beta"]]
-            psi_ks_lv[[lv]]  <- EST_s2_lv[[lv]][["psi"]]
-          } else if (nclus != 1) {
-            EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
-            beta_ks_lv[[lv]] <- lapply(EST_s2_lv[[lv]], "[[", "beta") # Does not work with only one cluster
-            psi_ks_lv[[lv]]  <- lapply(EST_s2_lv[[lv]], "[[", "psi")
-          }
-        }
-
-        # Combine all the beta matrices into just one per cluster
-
-        # Start with an empty beta
-        # beta <- matrix(data = 0, nrow = length(lat_var), ncol = length(lat_var))
-        # colnames(beta) <- rownames(beta) <- lat_var
-        # beta_ks <- lapply(X = seq_along(beta_ks), FUN = function(k){beta_ks[[k]] * 0})
-
-        # beta_ks will contain the regression parameters per cluster
-        # beta_ks_lv contains regressions per cluster AND per model of each endo latent variables
-
-        for (k in 1:nclus) {
-          for (lv in 1:length(endog)) {
-            # Select current endogenous latent variable
-            this_lv <- endog[lv]
-            col.idx <- colnames(beta_ks_lv[[lv]][[k]])
-
-            # Extract the regression coefficients of each endogenous latent variables
-            if (nclus == 1) {
-              beta_ks[this_lv, col.idx] <- beta_ks_lv[[lv]][this_lv, col.idx]
-            } else if (nclus != 1) {
-              beta_ks[[k]][this_lv, col.idx] <- beta_ks_lv[[lv]][[k]][this_lv, col.idx] # Does not work with only 1 cluster
-            }
-          }
-        }
-
-        # Re-order the beta matrices to make sure we are comparing the correct matrices
-        if (nclus == 1) {
-          beta_ks <- reorder(beta_ks)
-        } else if (nclus != 1) {
-          beta_ks <- lapply(1:nclus, function(x) {
-            reorder(beta_ks[[x]])
-          }) # Does not work with only one cluster
-        }
-      }
-
-      for (k in 1:nclus) {
-        # Previous matrices were only cluster-specific. We have to reconstruct the group-specific matrices (psi and sigma)
-
-        ## Save the cluster-specific psi and beta
-        ## ifelse() in case of only 1 cluster
-        ifelse(test = (nclus == 1), yes = (psi <- psi_ks), no = (psi <- psi_ks[[k]]))
-        ifelse(test = (nclus == 1), yes = (beta <- beta_ks), no = (beta <- beta_ks[[k]]))
-        for (g in 1:ngroups) {
-          # Reconstruct psi and sigma so they are group- and cluster-specific again.
-          # Replace the group-specific part of psi
-          # Exogenous (co)variance is always group-specific
-          psi[exog, exog] <- cov_eta[[g]][exog, exog] # Replace the group-specific part
-
-          # If the user required group-specific endogenous covariances (endo_group_specific = T), do:
-          if (endo_group_specific == T) {
-            # Take into account the effect of the cluster-specific regressions
-            # cov_eta[[g]] = solve(I - beta) %*% psi %*% t(solve(I - beta))
-            # If we solve for psi, then:
-            solved_psi <- ((I - beta) %*% cov_eta[[g]] %*% t((I - beta))) # Extract group-specific endog cov
-
-            # Replace endog 1
-            g_endog1_cov <- solved_psi[endog1, endog1]
-            if (length(endog1) > 1) { # Remove cov between endog 1 variables
-              g_endog1_cov[row(g_endog1_cov) != col(g_endog1_cov)] <- 0
-            }
-            psi[endog1, endog1] <- g_endog1_cov
-
-            # Replace endog 2
-            g_endog2_cov <- solved_psi[endog2, endog2] # Extract group-specific endog cov
-            psi[endog2, endog2] <- g_endog2_cov
-          }
-
-          # If required by the user, set to 0 the covariance between endog 2 factors
-          if (isFALSE(endogenous_cov)) {
-            psi[endog2, endog2][row(psi[endog2, endog2]) != col(psi[endog2, endog2])] <- 0
-          }
-
-          ###### EXPERIMENT ######
-          # If ordered = T force the variance of the factors to be 1 (to follow the scaling from step 1)
-          if (std.lv == T){
-            diag(psi) <- 1
-          }
-
-          # Store for future check
-          psi_gks[[g, k]] <- psi
-
-          # Get log-likelihood by comparing factor covariance matrix of step 1 (cov_eta) and step 2 (Sigma)
-          # Estimate Sigma (factor covariance matrix of step 2)
-          Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
-          Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
-
-          # Estimate the loglikelihood
-          loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
-            sample.mean = rep(0, nrow(cov_eta[[1]])),
-            sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
-            # sample.nobs = N_gks[g, k],
-            sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
-            Mu          = rep(0, nrow(cov_eta[[1]])),
-            Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
-          )
-
-          loglik_gks[g, k] <- loglik_gk
-          loglik_gksw[g, k] <- log(pi_ks[k]) + loglik_gk # weighted loglik
-
-          # # # Deprecated
-          # # Get log-likelihood by comparing factor covariance matrix of step 1 (cov_eta) and step 2 (Sigma)
-          # if (fit == "factors") {
-          #   # Estimate Sigma (factor covariance matrix of step 2)
-          #   Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
-          #   Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
-          #
-          #   # Estimate the loglikelihood
-          #   loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
-          #     sample.mean = rep(0, nrow(cov_eta[[1]])),
-          #     sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
-          #     # sample.nobs = N_gks[g, k],
-          #     sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
-          #     Mu          = rep(0, nrow(cov_eta[[1]])),
-          #     Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
-          #   )
-          # } else if (fit == "observed") {
-          #   # browser()
-          #   S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
-          #   Sigma[[g, k]] <- lambda_gs[[g]] %*% solve(I - beta) %*% psi %*% t(solve(I - beta)) %*% t(lambda_gs[[g]]) + theta_gs[[g]]
-          #   Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
-          #   # Sigma[[g, k]][lower.tri(Sigma[[g, k]])] <- t(Sigma[[g, k]])[lower.tri(Sigma[[g, k]])]
-          #   loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
-          #     sample.mean = rep(0, length(vars)),
-          #     sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
-          #     sample.cov  = S_biased, # Item (observed) covariance matrix from step 1
-          #     Mu          = rep(0, length(vars)),
-          #     Sigma       = Sigma[[g, k]] # Item (observed) covariance matrix from step 2
-          #   )
-          # }
-
-        } # ngroups
-      } # cluster
-
-      # Get total loglikelihood
-      # First, deal with arithmetic underflow by subtracting the maximum value per group
-      max_gs <- apply(loglik_gksw, 1, max) # Get max value per row
-      minus_max <- sweep(x = loglik_gksw, MARGIN = 1, STATS = max_gs, FUN = "-") # Subtract the max per row
-      exp_loglik <- exp(minus_max) # Exp before summing for total loglikelihood
-      loglik_gsw <- log(apply(exp_loglik, 1, sum)) # Sum exp_loglik per row and then take the log again
-      LL <- sum((loglik_gsw + max_gs)) # Add the maximum again and then sum them all for total loglikelihood
-
-      # Now, do E-step
-      E_out <- EStep(
-        pi_ks = pi_ks, ngroup = ngroups,
-        nclus = nclus, loglik = loglik_gks
-      )
-
-      z_gks <- E_out
-      diff_LL <- abs(LL - prev_LL)
-      log_test <- prev_LL < LL | isTRUE(all.equal(prev_LL, LL))
-      if (i == 1) {
-        log_test <- T
-      }
-      if (log_test == F) {
-        print(paste("Start", s, "; Iteration", i, "-------"))
-        print(paste("Difference", LL - prev_LL))
-      } # ; browser()}
-      log_test <- T
-      prev_LL <- LL
-      if (printing == T) {
-        print(i)
-        print(LL)
-      }
-    }
-
-    results_nstarts[[s]] <- s2out
-    z_gks_nstarts[[s]]   <- z_gks
-    loglik_nstarts[s]    <- LL
-    iter_nstarts[s]      <- i
-  } # multistart
+  results_nstarts <- SM$results_nstarts
+  z_gks_nstarts   <- SM$z_gks_nstarts
+  loglik_nstarts  <- SM$loglik_nstarts
+  iter_nstarts    <- SM$iter_nstarts
+  endog           <- SM$endog
+  exog            <- SM$exog
+  endog1          <- SM$endog1
+  endog2          <- SM$endog2
+  beta_ks         <- SM$beta_ks
+  psi_ks          <- SM$psi_ks
+  I               <- diag(length(lat_var))
 
   # Get best fit and z_gks based on the loglikelihood
   best_idx <- which.max(loglik_nstarts)
@@ -768,10 +287,10 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
   # Re-order betas
   if (nclus == 1) {
-    beta_ks <- reorder(beta_ks)
+    beta_ks <- reorder(beta_ks, exog = exog, endog = endog)
   } else if (nclus != 1) {
     beta_ks <- lapply(1:nclus, function(x) {
-      reorder(beta_ks[[x]])
+      reorder(beta_ks[[x]], exog = exog, endog = endog)
     }) # Does not work with only one cluster
   }
 
@@ -812,6 +331,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   ############################
   ##### GLOBAL ESTIMATION ####
   ############################
+
   # If the user requires global estimation of SAM:
   #   - Use the final local estimates to start global SAM.
   #   - Prepare the parameter table
@@ -1160,7 +680,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       # S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]] # Deprecated, we already have S_biased
       var_eta <- solve(I - beta) %*% psi_gks[[g, k]] %*% t(solve(I - beta))
       Sigma_gks[[g, k]] <- lambda_gs[[g]] %*% var_eta %*% t(lambda_gs[[g]]) + theta_gs[[g]]
-      Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
+      # Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
       # Sigma[[g, k]][lower.tri(Sigma[[g, k]])] <- t(Sigma[[g, k]])[lower.tri(Sigma[[g, k]])]
       Obs.loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
         sample.mean = rep(0, length(vars)),
@@ -1283,13 +803,13 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
   # Reoder psi_ks and beta_ks by using the reorder function in the lapply function
   psi_gks <- array(lapply(1:gro_clu, function(x) {
-    reorder(psi_gks[[x]])
+    reorder(psi_gks[[x]], exog = exog, endog = endog)
   }), dim = c(ngroups, nclus))
   if (nclus == 1) {
-    beta_ks <- reorder(beta_ks)
+    beta_ks <- reorder(beta_ks, exog = exog, endog = endog)
   } else if (nclus != 1) {
     beta_ks <- lapply(1:nclus, function(x) {
-      reorder(beta_ks[[x]])
+      reorder(beta_ks[[x]], exog = exog, endog = endog)
     }) # Does not work with only one cluster
   }
 
@@ -1303,7 +823,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
                          theta = theta_gs, beta_ks = beta_ks, cov_eta = cov_eta), # Factor covariance matrix from first step
     logLik        = list(loglik        = LL, # Final logLik of the model (its meaning depends on argument "sam_method")
                          global_loglik = ifelse(test = sam_method == "global", global_LL, NA), # Only valid if sam_method = "global"
-                         loglik_gksw   = loglik_gksw, # Weighted logLik per group-cluster combinations
+                    #     loglik_gksw   = loglik_gksw, # Weighted logLik per group-cluster combinations
                          runs_loglik   = loglik_nstarts, # loglik for each start
                          obs_loglik    = Obs.LL), # Only useful if fit = "local"
     model_sel     = list(BIC        = list(observed = list(BIC_N = Obs.BIC_N, BIC_G = Obs.BIC_G),
@@ -1324,7 +844,6 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
 
 # Step 1 function ----------------------------------------------------------------------------------
-
 Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
                   group = group, S_unbiased = S_unbiased, ...){
 
@@ -1473,6 +992,574 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
     N_gs      = N_gs,
     S_biased  = S_biased
   ))
+}
+
+# Step 2 function ----------------------------------------------------------------------------------
+Step2 <- function(ngroups             = ngroups,
+                  nclus               = nclus,
+                  nstarts             = nstarts,
+                  N_gs                = N_gs,
+                  seed                = seed,
+                  max_it              = max_it,
+                  cov_eta             = cov_eta,
+                  dat                 = dat,
+                  S2                  = S2,
+                  lat_var             = lat_var,
+                  ordered             = ordered,
+                  endo_group_specific = endo_group_specific,
+                  endogenous_cov      = endogenous_cov,
+                  lambda_gs           = lambda_gs,
+                  theta_gs            = theta_gs,
+                  S_unbiased          = S_unbiased,
+                  S1                  = S1,
+                  std.lv              = std.lv,
+                  partition           = partition,
+                  userStart           = userStart,
+                  printing            = printing,
+                  s1ori               = s1ori){
+
+  # We perform a MULTI-START procedure to avoid local maxima.
+  # Initialize objects to store results per random start.
+
+  results_nstarts <- vector(mode = "list", length = nstarts)
+  z_gks_nstarts   <- vector(mode = "list", length = nstarts) # z_gks refer to posteriors
+  loglik_nstarts  <- numeric(nstarts)
+  iter_nstarts    <- numeric(nstarts)
+
+  # Start using a pre-defined seed for the random partitions
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  # Re-order for measurement model matrices (observed variables must be in the same order as the factors)
+  if(ordered == T){S1 <- s1ori} # Recover original syntax for correct reordering
+
+  # browser()
+  # Do a fake sem() to obtain the correct settings to use in Step 2
+  # just a single sample cov!
+  fake <- lavaan::sem(
+    model = S2, sample.cov = rep(cov_eta[1], nclus),
+    sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
+    baseline = FALSE,
+    h1 = FALSE, check.post = FALSE,
+    loglik = FALSE,
+    sample.cov.rescale = FALSE,
+    fixed.x = TRUE,
+    information = "observed"
+  )
+  FakeprTbl <- parTable(fake)
+  fake@Options$do.fit <- TRUE
+  fake@Options$se     <- "none"
+  fake@ParTable$start <- NULL
+  fake@ParTable$est   <- NULL
+  fake@ParTable$se    <- NULL
+  fake@Options$start  <- "default"
+
+  # Get the labels of the endogenous 1 and 2 factors
+  endog1 <- lat_var[(lat_var %in% FakeprTbl$rhs[which(FakeprTbl$op == "~")]) &
+                      (lat_var %in% FakeprTbl$lhs[which(FakeprTbl$op == "~")])]
+  endog2 <- lat_var[!c(lat_var %in% FakeprTbl$rhs[which(FakeprTbl$op == "~")]) &
+                      (lat_var %in% FakeprTbl$lhs[which(FakeprTbl$op == "~")])]
+  endog <- c(endog1, endog2)
+  exog <- lat_var[!c(lat_var %in% endog)]
+
+  # endog2 <- lavNames(fake, "ov.y")
+  # endog1 <- lavNames(fake, "eqs.y")
+  # both.idx <- which(endog1 %in% endog2)
+  # if (length(both.idx) > 0L) {
+  #   endog1 <- endog1[-both.idx]
+  # }
+  # endog <- c(endog1, endog2)
+  # exog <- lavNames(fake, "lv")[!c(lavNames(fake, "lv") %in% endog)]
+
+  # Do a fake model per endo LV (to avoid bias due to reconstruction of group-specific endo variances). For more info, please see the Appendix of the paper related to this code.
+  # Please note that the index "lv" is used to identify each model per endo LV
+  # Please also note that this is used AFTER the first iteration. In the first iteration we start with only one model
+  fake_lv  <- vector(mode = "list", length = length(endog))
+  prTbl_lv <- vector(mode = "list", length = length(endog))
+
+  for (lv in 1:length(endog)) {
+
+    # Create a parameter table per endogenous latent variables
+    # Select the current latent variable
+    this_lv <- endog[endog %in% endog[lv]]
+    # browser()
+    # Keep the (co)variances of the other latent variables and (if global) the measurement parameters
+    var_not_this_lv <- which(FakeprTbl$lhs != this_lv & FakeprTbl$op == "~~") # keeps lv covariances and obs res variances
+    fac_load        <- which(FakeprTbl$lhs != this_lv & FakeprTbl$op == "=~") # Factor load of other factors
+
+    # Get the new parameter table per endogenous latent variable
+    prTbl_idx       <- c(which(FakeprTbl$lhs == this_lv), fac_load, var_not_this_lv)
+    prTbl_idx       <- sort(prTbl_idx)
+    prTbl_lv[[lv]]  <- FakeprTbl[prTbl_idx, ]
+
+    # Run the model per endo latent variable
+    fake_lv[[lv]] <- lavaan::sem(
+      model = prTbl_lv[[lv]], sample.cov = rep(cov_eta[1], nclus),
+      sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
+      baseline = FALSE,
+      h1 = FALSE, check.post = FALSE,
+      loglik = FALSE,
+      sample.cov.rescale = FALSE,
+      fixed.x = TRUE,
+      information = "observed"
+    )
+
+    fake_lv[[lv]]@Options$do.fit <- TRUE
+    fake_lv[[lv]]@Options$se     <- "none"
+    fake_lv[[lv]]@ParTable$start <- NULL
+    fake_lv[[lv]]@ParTable$est   <- NULL
+    fake_lv[[lv]]@ParTable$se    <- NULL
+    fake_lv[[lv]]@Options$start  <- "default"
+  }
+
+  # Re-order (order of columns and rows) cov_eta to make sure later computations are comparing correct matrices
+  cov_eta <- lapply(1:ngroups, function(x) {
+    reorder(cov_eta[[x]], exog = exog, endog = endog)
+  })
+  lambda_gs <- lapply(1:ngroups, function(x) {
+    reorder_obs(lambda_gs[[x]], matrix = "lambda", exog = exog, endog = endog,
+                endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
+  })
+  theta_gs <- lapply(1:ngroups, function(x) {
+    reorder_obs(theta_gs[[x]], matrix = "theta", exog = exog, endog = endog,
+                endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
+  })
+  S_unbiased <- lapply(1:ngroups, function(x) {
+    reorder_obs(S_unbiased[[x]], matrix = "theta", exog = exog, endog = endog,
+                endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
+  })
+
+  # Multi-start
+  for (s in 1:nstarts) {
+    if (printing == T) {
+      print(paste("Start", s, "-----------------"))
+    }
+
+    # Random Start
+    if (!is.null(userStart)) {
+      # In case the user inputs a pre-defined start, use it for z_gks
+      z_gks <- userStart
+    } else if (partition == "hard") {
+      # Create initial random partition. Hard partition. (z_gks)
+      cl <- 0
+      while (cl < 1) { # "while loop" to make sure all clusters get at least one group
+        z_gks <- t(replicate(ngroups, sample(x = c(rep(0, (nclus - 1)), 1))))
+        cl <- min(colSums(z_gks))
+      }
+    } else if (partition == "soft") {
+      z_gks <- matrix(data = runif(n = c(nclus * ngroups)), ncol = nclus, nrow = ngroups)
+      z_gks <- z_gks / rowSums(z_gks)
+    }
+
+    # Initialize psi_gks
+    psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+
+    # Initialize weighted z_gks (weighted for each endo LV)
+    # Done to avoid bias - NOT NECESSARY in the first iteration
+    z_gks_lv <- vector(mode = "list", length = length(endog))
+    for (lv in 1:length(endog)) {
+      z_gks_lv[[lv]] <- matrix(data = NA, ncol = nclus, nrow = ngroups)
+    }
+
+    # Prepare objects for the while loop
+    i <- 0 # iteration initialization
+    prev_LL <- 0 # previous loglikelihood initialization
+    diff_LL <- 1 # Set a diff of 1 just to start the while loop
+    log_test <- T # TEMPORARY - To check if there is decreasing loglikelihood
+
+    # Run full-convergence multi-start
+    while (diff_LL > 1e-6 & i < max_it & isTRUE(log_test)) {
+      i <- i + 1
+      pi_ks <- colMeans(z_gks) # Prior probabilities
+      N_gks <- z_gks * N_gs # Sample size per group-cluster combination
+      # N_gks <- as.vector(N_gks)
+
+      # Weight posteriors for each endogenous factor - Not necessary in the first iteration
+      # To avoid bias when endo_group_specific == T. That is, when the endogenous variances are group-specific
+      if (isTRUE(endo_group_specific) & i > 1) {
+        for (lv in 1:length(endog)) {
+          for (k in 1:nclus) {
+            for (g in 1:ngroups) {
+              # Correct bias by dividing by the correct endo LV
+              z_gks_lv[[lv]][g, k] <- z_gks[g, k] / psi_gks[[g, k]][endog[lv], endog[lv]]
+            }
+          }
+        }
+      }
+
+      # M-Step ---------
+
+      # Trick to avoid slow multi-group estimation
+      # Get a weighted averaged covariance matrix for each cluster
+      if (isFALSE(endo_group_specific) | i == 1) {
+
+        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
+        # For the first iteration there is no weighted z_gks
+        COV <- vector("list", length = nclus)
+
+        for (k in 1:nclus) {
+          # create 'averaged' sample cov for this cluster
+          this_nobs <- z_gks[, k] * N_gs
+          this_w <- this_nobs / sum(this_nobs)
+          tmp <- lapply(seq_along(cov_eta), function(g) {
+            cov_eta[[g]] * this_w[g]
+          })
+          COV[[k]] <- Reduce("+", tmp)
+          # COV[[k]] <- 0.5 * (COV[[k]] + t(COV[[k]])) # Force the matrix to be symmetric
+        }
+      } else if (i > 1) {
+
+        # After the first iteration
+        # Get one weighted cluster-specific COV per endo LV
+        COV_lv <- vector("list", length = length(endog))
+        for (lv in 1:length(endog)) {
+          COV_lv[[lv]] <- vector("list", length = nclus)
+        }
+
+        for (lv in 1:length(endog)) {
+          for (k in 1:nclus) {
+            # create 'averaged' sample cov for this cluster
+            this_nobs <- z_gks_lv[[lv]][, k] * N_gs
+            this_w <- this_nobs / sum(this_nobs)
+            tmp <- lapply(seq_along(cov_eta), function(g) {
+              cov_eta[[g]] * this_w[g]
+            })
+            COV_lv[[lv]][[k]] <- Reduce("+", tmp)
+            # COV_lv[[lv]][[k]] <- 0.5 * (COV_lv[[lv]][[k]] + t(COV_lv[[lv]][[k]])) # Force symmetry
+          }
+        }
+      }
+
+      # PARAMETER ESTIMATION
+      # Call lavaan to estimate the structural parameters
+      # the 'groups' are the clusters
+      # Note: this makes all resulting parameters to be cluster-specific (it is reconstructed later)
+
+      if (isFALSE(endo_group_specific) | i == 1) {
+        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
+        # For the first iteration, perform the full structural model estimation
+        s2out <- lavaan::lavaan(
+          slotOptions       = fake@Options,
+          slotParTable      = fake@ParTable,
+          sample.cov        = COV,
+          sample.nobs       = rep(nrow(dat), nclus),
+          # slotModel       = slotModel,
+          # slotData        = fake@Data,
+          # slotSampleStats = fake@SampleStats
+        )
+      } else if (i > 1) {
+        # After the first iteration
+        # Run structural estimation once per endo LV
+        s2out <- vector(mode = "list", length = length(endog))
+        for (lv in 1:length(endog)) {
+          s2out[[lv]] <- lavaan(
+            slotOptions       = fake_lv[[lv]]@Options,
+            slotParTable      = fake_lv[[lv]]@ParTable,
+            sample.cov        = COV_lv[[lv]],
+            sample.nobs       = rep(nrow(dat), nclus)
+            # slotModel       = slotModel,
+            # slotData        = fake@Data,
+            # slotSampleStats = fake@SampleStats
+          )
+        }
+      }
+
+
+      # start <- partable(s2out)$est
+
+      # compute loglikelihood for all group/cluster combinations
+      # Initialize matrices to store loglikelihoods
+      loglik_gks  <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+      loglik_gksw <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+      gk <- 0
+
+      # Prepare Sigma
+      # Initialize the object for estimating Sigma
+      Sigma <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+      I <- diag(length(lat_var)) # Identity matrix based on number of latent variables. Used later
+
+      # Extract cluster-specific parameters from step 2
+      if (isFALSE(endo_group_specific) | i == 1) {
+        # Do this when endo_group_specific is False OR when it is True and we are in the first iteration
+        # In iteration one, there is only model (s2out) from which we extract the parameters.
+        if (nclus == 1) {
+          EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
+          beta_ks <- EST_s2[["beta"]]
+          psi_ks  <- EST_s2[["psi"]]
+        } else if (nclus != 1) {
+          EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE)
+          beta_ks <- lapply(EST_s2, "[[", "beta") # Does not work with only one cluster
+          psi_ks  <- lapply(EST_s2, "[[", "psi")
+        }
+
+        # Re order for correct comparisons
+        if (nclus == 1) {
+          beta_ks <- reorder(beta_ks, exog = exog, endog = endog)
+          psi_ks <- reorder(psi_ks, exog = exog, endog = endog)
+        } else if (nclus != 1) {
+          beta_ks <- lapply(1:nclus, function(x) {
+            reorder(beta_ks[[x]], exog = exog, endog = endog)
+          }) # Does not work with only one cluster
+          psi_ks <- lapply(1:nclus, function(x) {
+            reorder(psi_ks[[x]], exog = exog, endog = endog)
+          })
+        }
+      } else if (i > 1) {
+        # After iteration 1 we have several models (s2out[[lv]]) from which we extract the parameters
+        # Extract the beta matrices per model (one per endo LV)
+        # Initialize lists to store the parameters
+        EST_s2_lv  <- vector(mode = "list", length = length(endog))
+        beta_ks_lv <- vector(mode = "list", length = length(endog))
+        psi_ks_lv  <- vector(mode = "list", length = length(endog))
+        for (lv in 1:length(endog)) {
+          if (nclus == 1) {
+            EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
+            beta_ks_lv[[lv]] <- EST_s2_lv[[lv]][["beta"]]
+            psi_ks_lv[[lv]]  <- EST_s2_lv[[lv]][["psi"]]
+          } else if (nclus != 1) {
+            EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
+            beta_ks_lv[[lv]] <- lapply(EST_s2_lv[[lv]], "[[", "beta") # Does not work with only one cluster
+            psi_ks_lv[[lv]]  <- lapply(EST_s2_lv[[lv]], "[[", "psi")
+          }
+        }
+
+        # Combine all the beta matrices into just one per cluster
+
+        # Start with an empty beta
+        # beta <- matrix(data = 0, nrow = length(lat_var), ncol = length(lat_var))
+        # colnames(beta) <- rownames(beta) <- lat_var
+        # beta_ks <- lapply(X = seq_along(beta_ks), FUN = function(k){beta_ks[[k]] * 0})
+
+        # beta_ks will contain the regression parameters per cluster
+        # beta_ks_lv contains regressions per cluster AND per model of each endo latent variables
+
+        for (k in 1:nclus) {
+          for (lv in 1:length(endog)) {
+            # Select current endogenous latent variable
+            this_lv <- endog[lv]
+            col.idx <- colnames(beta_ks_lv[[lv]][[k]])
+
+            # Extract the regression coefficients of each endogenous latent variables
+            if (nclus == 1) {
+              beta_ks[this_lv, col.idx] <- beta_ks_lv[[lv]][this_lv, col.idx]
+            } else if (nclus != 1) {
+              beta_ks[[k]][this_lv, col.idx] <- beta_ks_lv[[lv]][[k]][this_lv, col.idx] # Does not work with only 1 cluster
+            }
+          }
+        }
+
+        # Re-order the beta matrices to make sure we are comparing the correct matrices
+        if (nclus == 1) {
+          beta_ks <- reorder(beta_ks, exog = exog, endog = endog)
+        } else if (nclus != 1) {
+          beta_ks <- lapply(1:nclus, function(x) {
+            reorder(beta_ks[[x]], exog = exog, endog = endog)
+          }) # Does not work with only one cluster
+        }
+      }
+
+      for (k in 1:nclus) {
+        # Previous matrices were only cluster-specific. We have to reconstruct the group-specific matrices (psi and sigma)
+
+        ## Save the cluster-specific psi and beta
+        ## ifelse() in case of only 1 cluster
+        ifelse(test = (nclus == 1), yes = (psi <- psi_ks), no = (psi <- psi_ks[[k]]))
+        ifelse(test = (nclus == 1), yes = (beta <- beta_ks), no = (beta <- beta_ks[[k]]))
+        for (g in 1:ngroups) {
+          # Reconstruct psi and sigma so they are group- and cluster-specific again.
+          # Replace the group-specific part of psi
+          # Exogenous (co)variance is always group-specific
+          psi[exog, exog] <- cov_eta[[g]][exog, exog] # Replace the group-specific part
+
+          # If the user required group-specific endogenous covariances (endo_group_specific = T), do:
+          if (endo_group_specific == T) {
+            # Take into account the effect of the cluster-specific regressions
+            # cov_eta[[g]] = solve(I - beta) %*% psi %*% t(solve(I - beta))
+            # If we solve for psi, then:
+            solved_psi <- ((I - beta) %*% cov_eta[[g]] %*% t((I - beta))) # Extract group-specific endog cov
+
+            # Replace endog 1
+            g_endog1_cov <- solved_psi[endog1, endog1]
+            if (length(endog1) > 1) { # Remove cov between endog 1 variables
+              g_endog1_cov[row(g_endog1_cov) != col(g_endog1_cov)] <- 0
+            }
+            psi[endog1, endog1] <- g_endog1_cov
+
+            # Replace endog 2
+            g_endog2_cov <- solved_psi[endog2, endog2] # Extract group-specific endog cov
+            psi[endog2, endog2] <- g_endog2_cov
+          }
+
+          # If required by the user, set to 0 the covariance between endog 2 factors
+          if (isFALSE(endogenous_cov)) {
+            psi[endog2, endog2][row(psi[endog2, endog2]) != col(psi[endog2, endog2])] <- 0
+          }
+
+          ###### EXPERIMENT ######
+          # If ordered = T force the variance of the factors to be 1 (to follow the scaling from step 1)
+          if (std.lv == T){
+            diag(psi) <- 1
+          }
+
+          # Store for future check
+          psi_gks[[g, k]] <- psi
+
+          # Get log-likelihood by comparing factor covariance matrix of step 1 (cov_eta) and step 2 (Sigma)
+          # Estimate Sigma (factor covariance matrix of step 2)
+          Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
+          Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
+
+          # Estimate the loglikelihood
+          loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+            sample.mean = rep(0, nrow(cov_eta[[1]])),
+            sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+            # sample.nobs = N_gks[g, k],
+            sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
+            Mu          = rep(0, nrow(cov_eta[[1]])),
+            Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
+          )
+
+          loglik_gks[g, k] <- loglik_gk
+          loglik_gksw[g, k] <- log(pi_ks[k]) + loglik_gk # weighted loglik
+
+          # # # Deprecated
+          # # Get log-likelihood by comparing factor covariance matrix of step 1 (cov_eta) and step 2 (Sigma)
+          # if (fit == "factors") {
+          #   # Estimate Sigma (factor covariance matrix of step 2)
+          #   Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
+          #   Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
+          #
+          #   # Estimate the loglikelihood
+          #   loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          #     sample.mean = rep(0, nrow(cov_eta[[1]])),
+          #     sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+          #     # sample.nobs = N_gks[g, k],
+          #     sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
+          #     Mu          = rep(0, nrow(cov_eta[[1]])),
+          #     Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
+          #   )
+          # } else if (fit == "observed") {
+          #   # browser()
+          #   S_biased <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
+          #   Sigma[[g, k]] <- lambda_gs[[g]] %*% solve(I - beta) %*% psi %*% t(solve(I - beta)) %*% t(lambda_gs[[g]]) + theta_gs[[g]]
+          #   Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
+          #   # Sigma[[g, k]][lower.tri(Sigma[[g, k]])] <- t(Sigma[[g, k]])[lower.tri(Sigma[[g, k]])]
+          #   loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          #     sample.mean = rep(0, length(vars)),
+          #     sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+          #     sample.cov  = S_biased, # Item (observed) covariance matrix from step 1
+          #     Mu          = rep(0, length(vars)),
+          #     Sigma       = Sigma[[g, k]] # Item (observed) covariance matrix from step 2
+          #   )
+          # }
+
+        } # ngroups
+      } # cluster
+
+      # Get total loglikelihood
+      # First, deal with arithmetic underflow by subtracting the maximum value per group
+      max_gs <- apply(loglik_gksw, 1, max) # Get max value per row
+      minus_max <- sweep(x = loglik_gksw, MARGIN = 1, STATS = max_gs, FUN = "-") # Subtract the max per row
+      exp_loglik <- exp(minus_max) # Exp before summing for total loglikelihood
+      loglik_gsw <- log(apply(exp_loglik, 1, sum)) # Sum exp_loglik per row and then take the log again
+      LL <- sum((loglik_gsw + max_gs)) # Add the maximum again and then sum them all for total loglikelihood
+
+      # Now, do E-step
+      E_out <- EStep(
+        pi_ks = pi_ks, ngroup = ngroups,
+        nclus = nclus, loglik = loglik_gks
+      )
+
+      z_gks <- E_out
+      diff_LL <- abs(LL - prev_LL)
+      log_test <- prev_LL < LL | isTRUE(all.equal(prev_LL, LL))
+      if (i == 1) {
+        log_test <- T
+      }
+      if (log_test == F) {
+        print(paste("Start", s, "; Iteration", i, "-------"))
+        print(paste("Difference", LL - prev_LL))
+      } # ; browser()}
+      log_test <- T
+      prev_LL <- LL
+      if (printing == T) {
+        print(i)
+        print(LL)
+      }
+    }
+
+    results_nstarts[[s]] <- s2out
+    z_gks_nstarts[[s]]   <- z_gks
+    loglik_nstarts[s]    <- LL
+    iter_nstarts[s]      <- i
+  } # multistart
+
+  return(list(
+    results_nstarts = results_nstarts,
+    z_gks_nstarts   = z_gks_nstarts,
+    loglik_nstarts  = loglik_nstarts,
+    iter_nstarts    = iter_nstarts,
+    endog           = endog,
+    exog            = exog,
+    endog1          = endog1,
+    endog2          = endog2,
+    beta_ks         = beta_ks,
+    psi_ks          = psi_ks)
+  )
+}
+
+# Reordering functions -----------------------------------------------------------------------------
+# Create a function to reorder matrices (used later). Done due to:
+# (1) It allows us to organize the matrices in an easier to understand order. Exogenous variables first, and endogeonus later.
+# (2) Used to make sure we are multiplying matrices in the correct way
+
+# Re-order for factors
+reorder <- function(x, exog = exog, endog = endog) {
+  x <- x[c(exog, endog), c(exog, endog)]
+  return(x)
+}
+
+# Re-order of observed variables
+reorder_obs <- function(x, matrix, exog = exog, endog = endog,
+                        endog1 = endog1, endog2 = endog2,
+                        S1 = S1, dat = dat) {
+  # Re-write model
+  # Split into lines
+  lines_model <- unlist(strsplit(unlist(S1), "\n"))
+  rewritten <- c()
+  # browser()
+  # Extract the observed variable names per factor
+  # Exogenous factors
+  for (i in 1:length(exog)) {
+    rewritten <- c(rewritten, lines_model[grepl(exog[i], lines_model)])
+  }
+
+  # Endogenous 1 factors
+  if(length(endog1 > 0)){
+    for (i in 1:length(endog1)) {
+      rewritten <- c(rewritten, lines_model[grepl(endog1[i], lines_model)])
+    }
+  }
+
+  # Endogenous 2 factors
+  for (i in 1:length(endog2)) {
+    rewritten <- c(rewritten, lines_model[grepl(endog2[i], lines_model)])
+  }
+
+  # Run fake measur_model
+  fake_measur  <- lavaan::cfa(model = rewritten, data = dat, do.fit = F)
+  correct_vars <- lavNames(fake_measur)
+
+  if (matrix == "lambda") {
+    # Reorder lambda
+    x <- x[correct_vars, c(exog, endog)]
+  } else if (matrix == "theta") {
+    # Reorder theta
+    x <- x[correct_vars, correct_vars]
+  }
+
+  return(x)
 }
 
 # E-step --------------------------------------------------------
