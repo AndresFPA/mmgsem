@@ -68,7 +68,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
                    partition = "hard", endogenous_cov = TRUE,
                    endo_group_specific = TRUE,
                    sam_method = "local", meanstr = FALSE,
-                   rescaling = F,
+                   rescaling = F, standard_error = FALSE
                    ...) {
 
   # Get arguments in ...
@@ -796,6 +796,11 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   ICL     <- BIC_G + (sum_entropy * 2)
   Obs.ICL <- Obs.BIC_G + (sum_entropy * 2)
 
+  # Compute standard errors if the user requires them
+  if(isTRUE(standard_error)){
+    standard_errors <- mmgsem::se
+  }
+
   # Re order matrices so that we get them in the following order:
   # (1) Exogenous latent variables
   # (2) Endogenous latent variables: independent and dependent variables at the same time
@@ -855,7 +860,7 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
 
   s1_dummy <- lavaan::cfa(
     model = model_dummy, data = centered, group = group,
-    se = "none", test = "none",
+    test = "none",
     baseline = FALSE, h1 = FALSE,
     implied = FALSE, loglik = FALSE,
     do.fit = FALSE,
@@ -881,7 +886,7 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
         # Estimate one cfa per measurement block
         S1output[[m]] <- lavaan::cfa(
           model = S1[[m]], data = centered, group = group,
-          se = "none", test = "none",
+          test = "none",
           baseline = FALSE, h1 = FALSE,
           implied = FALSE, loglik = FALSE,
           ...
@@ -959,7 +964,7 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
     } else if (is.null(s1_fit)) {
       S1output <- lavaan::cfa(
         model = S1, data = centered, group = group,
-        se = "none", test = "none",
+        test = "none",
         baseline = FALSE, h1 = FALSE,
         implied = FALSE, loglik = FALSE,
         ...
