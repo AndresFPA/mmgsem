@@ -68,7 +68,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
                    partition = "hard", endogenous_cov = TRUE,
                    endo_group_specific = TRUE,
                    sam_method = "local", meanstr = FALSE,
-                   rescaling = F, standard_error = FALSE
+                   rescaling = F
                    ...) {
 
   # Get arguments in ...
@@ -795,11 +795,6 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   # ICL
   ICL     <- BIC_G + (sum_entropy * 2)
   Obs.ICL <- Obs.BIC_G + (sum_entropy * 2)
-
-  # Compute standard errors if the user requires them
-  if(isTRUE(standard_error)){
-    standard_errors <- mmgsem::se
-  }
 
   # Re order matrices so that we get them in the following order:
   # (1) Exogenous latent variables
