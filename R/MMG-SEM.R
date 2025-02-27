@@ -68,7 +68,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
                    partition = "hard", endogenous_cov = TRUE,
                    endo_group_specific = TRUE,
                    sam_method = "local", meanstr = FALSE,
-                   rescaling = F
+                   rescaling = F,
                    ...) {
 
   # Get arguments in ...
