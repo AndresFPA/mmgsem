@@ -88,8 +88,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
   # Get several values relevant for future steps
   g_name  <- as.character(unique(dat[, group]))
-  vars    <- lavaan::lavNames(lavaanify(S1, auto = TRUE))
-  lat_var <- lavaan::lavNames(lavaanify(S1, auto = TRUE), "lv")
+  vars    <- lavaan::lavNames(lavaan::lavaanify(S1, auto = TRUE))
+  lat_var <- lavaan::lavNames(lavaan::lavaanify(S1, auto = TRUE), "lv")
   n_var   <- length(vars)
 
   # Add an error in case of incompatibility in the arguments regarding the scale of the latent variables
@@ -815,6 +815,10 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
 
   names(beta_ks) <- paste("Cluster", seq_len(nclus))
 
+  # Add the group name to the posterior matrix
+  z_gks       <- as.data.frame(z_gks)
+  z_gks$Group <- g_name
+
   return(list(
     posteriors    = z_gks,
     final_fit     = s2out, # Final fit of step 2 (contains all group-cluster combinations)
@@ -891,8 +895,8 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
 
     # How many groups?
     ngroups <- lavInspect(S1output[[1]], "ngroups")
-    vars    <- lavaan::lavNames(lavaanify(S1, auto = TRUE))
-    lat_var <- lavaan::lavNames(lavaanify(S1, auto = TRUE), "lv")
+    vars    <- lavaan::lavNames(lavaan::lavaanify(S1, auto = TRUE))
+    lat_var <- lavaan::lavNames(lavaan::lavaanify(S1, auto = TRUE), "lv")
 
     # Extract measurement parameters per measurement block
     # Extract Lambda & Theta for each group in all blocks

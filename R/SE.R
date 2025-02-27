@@ -13,6 +13,8 @@
 #' @export
 se <- function(object){
   # Prepare some objects
+  # Remove unnecessary last column of the posteriors object
+  object$posteriors <- object$posteriors[, 1:(ncol(object$posteriors) - 1)]
   ngroups <- nrow(object$posteriors)
   nclus   <- ncol(object$posteriors)
 
@@ -271,7 +273,7 @@ se <- function(object){
   # Add the corrected values to the final results
   SE$corrected <- setNames(object = Sigma_2_corrected, nm = colnames(HESS[step2.idx, step2.idx]))
 
-  return(list(SE = SE, HESS = HESS, beta_vec = beta_vec))
+  return(list(SE = SE, HESS = HESS, est_vec = x, se_vector = vector_SE))
 }
 
 # Objective function for the Hessian ---------------------------------------------------------------
