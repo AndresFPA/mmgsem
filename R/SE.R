@@ -26,7 +26,17 @@ se <- function(object){
   ## Get the parameter vector ##
   # Get the measurement model parameters in a vector
   # Lambda
-  partbl <- parTable(object$MM)
+  # Deal with measurement blocks
+  MM     <- object$MM
+  partbl <- c()
+  if (is.list(MM)){ # Extract the parameter table per block and bind it together for a complete table
+    for(m in 1:length(MM)){
+      tmp_partbl <- parTable(MM[[m]])
+      partbl     <- rbind(partbl, tmp_partbl)
+    }
+  } else {
+    partbl <- parTable(MM)
+  }
   partbl$fullpar <- paste0(partbl$lhs, partbl$op, partbl$rhs)
   constrained    <- partbl$fullpar[which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label == partbl$plabel)]
   unconstrained  <- partbl$fullpar[which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label == "")]
@@ -90,6 +100,7 @@ se <- function(object){
   # However, even if repeated, it is only one parameter. The unique.idx removes the repeated parameter.
   for(k in 1:nclus){
     for(g in 1:ngroups){
+      object$param$psi_gks[[g, k]] <- round(object$param$psi_gks[[g, k]], 7) # Avoid floting point difference
       non_zer.idx <- which(unlist(object$param$psi_gks[[g, k]]) != 0)
       unique.idx  <- !duplicated(unlist(object$param$psi_gks[[g, k]])[non_zer.idx])
       cov_vec <- c(cov_vec, unlist(object$param$psi_gks[[g, k]])[non_zer.idx][unique.idx])
@@ -141,7 +152,7 @@ se <- function(object){
 
   HESS <- compute_hessian(f         = obj.S2,
                           x         = x,
-                          d         = 1e-05,
+                          d         = 1e-02,
                           lambda_mat = object$param$lambda,
                           theta_mat  = object$param$theta,
                           beta_mat   = object$param$beta_ks,
