@@ -1,7 +1,11 @@
 #' @export
-summary_MMGSEM <- function(model, model_selection = F) {
+summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
   if (!is.list(model)) {
     stop("Input must be a list, likely the output of MMGSEM().")
+  }
+
+  if (!is.null(se) & isTRUE(model_selection)){
+    stop("se argument can only be used with a single resulting model from MMGSEM(). Thus, is not compatible model_selection = T")
   }
 
   if(isFALSE(model_selection)){
@@ -14,6 +18,25 @@ summary_MMGSEM <- function(model, model_selection = F) {
     BIC         <- model$model_sel$BIC     # BIC
     AIC         <- model$model_sel$AIC     # AIC
     posteriors  <- model$posteriors        # Posterior matrix
+
+    if(!is.null(se)){
+      # Extract standard errors
+      betas_se           <- se$SE_vector$betas_se
+      betas_se_corrected <- se$SE_vector$betas_se_corrected
+      # Extract betas as vector
+      betas_vector       <- se$estimates_vector$betas_est
+
+      # Prepare z-scores and p-values
+      betas_z           <- betas_vector/betas_se
+      betas_z_corrected <- betas_vector/betas_se_corrected
+
+      # For the p-values:
+      # Use the pnorm() function with absolute z scores and lower.tail = F to obtain correct TWO-TAILED p-values.
+      # They must be multiplied by 2.
+      betas_pvalue           <- 2*(stats::pnorm(q = abs(betas_z), lower.tail = F))
+      betas_pvalue_corrected <- 2*(stats::pnorm(q = abs(betas_z_corrected), lower.tail = F))
+    }
+
     # entropy <- model$model_sel$R2_entropy
 
     # Display results in a readable format
@@ -38,9 +61,9 @@ summary_MMGSEM <- function(model, model_selection = F) {
       # Prepare the output
       # Convert matrix to a more suitable data frame
       if (is.list(beta_ks)) {
-        beta_df <- as.data.frame(as.table(mmgsem_fit$param$beta_ks[[k]]))
+        beta_df <- as.data.frame(as.table(model$param$beta_ks[[k]]))
       } else { # Which means we only have one cluster
-        beta_df <- as.data.frame(as.table(mmgsem_fit$param$beta_ks))
+        beta_df <- as.data.frame(as.table(model$param$beta_ks))
       }
 
       # Rename columns
@@ -57,6 +80,35 @@ summary_MMGSEM <- function(model, model_selection = F) {
 
       # Round beta results for cleaner presentation
       beta_df$Estimate <- round(beta_df$Estimate, 3)
+
+      # Add standard errors if requested
+      if(!is.null(se)){
+        # Extract the relevant values for this cluster
+        pattern <- paste0("k", k, "$")
+        betas_se_k               <- betas_se[grepl(pattern, names(betas_se))]
+        betas_se_corrected_k     <- betas_se_corrected[grepl(pattern, names(betas_se_corrected))]
+        betas_z_k                <- betas_z[grepl(pattern, names(betas_z))]
+        betas_pvalue_k           <- betas_pvalue[grepl(pattern, names(betas_pvalue))]
+        betas_z_corrected_k      <- betas_z_corrected[grepl(pattern, names(betas_z_corrected))]
+        betas_pvalue_corrected_k <- betas_pvalue_corrected[grepl(pattern, names(betas_pvalue_corrected))]
+
+        # Round for cleaner presentation
+        betas_se_k               <- round(betas_se_k, 3)
+        betas_se_corrected_k     <- round(betas_se_corrected_k, 3)
+        betas_z_k                <- round(betas_z_k, 3)
+        betas_pvalue_k           <- round(betas_pvalue_k, 3)
+        betas_z_corrected_k      <- round(betas_z_corrected_k, 3)
+        betas_pvalue_corrected_k <- round(betas_pvalue_corrected_k, 3)
+
+        # Original hypothesis testing (without correction) is not printed
+        # beta_df$se      <- betas_se_k
+        # beta_df$z_score <- betas_z_k
+        # beta_df$p_value <- betas_pvalue_k
+
+        beta_df$se      <- betas_se_corrected_k
+        beta_df$z_score <- betas_z_corrected_k
+        beta_df$p_value <- betas_pvalue_corrected_k
+      }
 
       # Print results
       cat("\nCluster", k, ":\n")

@@ -31,11 +31,11 @@ se <- function(object){
   partbl <- c()
   if (is.list(MM)){ # Extract the parameter table per block and bind it together for a complete table
     for(m in 1:length(MM)){
-      tmp_partbl <- parTable(MM[[m]])
+      tmp_partbl <- lavaan::parTable(MM[[m]])
       partbl     <- rbind(partbl, tmp_partbl)
     }
   } else {
-    partbl <- parTable(MM)
+    partbl <- lavaan::parTable(MM)
   }
   partbl$fullpar <- paste0(partbl$lhs, partbl$op, partbl$rhs)
   constrained    <- partbl$fullpar[which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label == partbl$plabel)]
@@ -133,9 +133,15 @@ se <- function(object){
 
   # I have group-specific covariances and group-cluster specific covariances.
   # Which ones are group-specific?
-  g.covs  <- unique(cov_vec[duplicated(cov_vec)]) # Group-specific (why duplicated? I extract all possible group-cluster combination, but the group-specific ones will be repeated on the second cluster)
-  g.covs  <- setNames(object = g.covs, nm = names(cov_vec[cov_vec %in% g.covs])[1:length(g.covs)])
-  gk.covs <- cov_vec[!c(cov_vec %in% g.covs)] # Group-cluster specific
+  # Getting the correct vectors is very tricky due to our constraints
+  # First identify exogenous variables (the group-specific parameters are associated with exogenous variables)
+  exog_factors <- names(which(rowSums(x = object$param$beta_ks[[1]]) == 0)) # Which parameters are not response variables in the beta matrix?
+  exog_pattern <- paste0("^(", paste(exog_factors, collapse = "|"), ").*k1$")
+  g.covs  <- cov_vec[grepl(exog_pattern, names(cov_vec))]
+
+  endog_factors <- names(which(rowSums(x = object$param$beta_ks[[1]]) != 0))
+  endog_pattern <- paste0("^(", paste(endog_factors, collapse = "|"), ")")
+  gk.covs <- cov_vec[grepl(endog_pattern, names(cov_vec))] # Group-cluster specific
 
   # (2) Create the objective function of the step 2 parameters
   # The objective function simply takes the parameter vector and fills in the corresponding matrix to get the LL
@@ -152,7 +158,7 @@ se <- function(object){
 
   HESS <- compute_hessian(f         = obj.S2,
                           x         = x,
-                          d         = 1e-02,
+                          d         = 1e-06,
                           lambda_mat = object$param$lambda,
                           theta_mat  = object$param$theta,
                           beta_mat   = object$param$beta_ks,
@@ -170,7 +176,7 @@ se <- function(object){
                           vec_ind    = vec_ind)
 
   # (4) Organize the SE for each parameter
-  vector_SE <- setNames(diag(sqrt(ginv(-HESS, tol = 1e-06))), colnames(HESS)) # The SE comes from the inverse of the negative hessian
+  vector_SE <- setNames(diag(sqrt(MASS::ginv(-HESS, tol = 1e-06))), colnames(HESS)) # The SE comes from the inverse of the negative hessian
 
   SE.S2 <- function(x, lambda_mat, theta_mat,
                     beta_mat, psi_mat,
@@ -202,7 +208,7 @@ se <- function(object){
 
     # Relocating theta
     g.theta.idx <- length(thetas)/ngroups
-    # browser()
+
     for(g in 1:ngroups){
       theta_vec <- thetas[(((g - 1)*g.theta.idx) + 1):(g.theta.idx*g)]
       theta_mat[[g]][idx.theta] <- theta_vec
@@ -237,25 +243,25 @@ se <- function(object){
     ))
   }
 
-  SE <- SE.S2(x          = vector_SE,
-              lambda_mat = object$param$lambda,
-              theta_mat  = object$param$theta,
-              beta_mat   = object$param$beta_ks,
-              psi_mat    = object$param$psi_gks,
-              pi_ks      = colMeans(object$posteriors),
-              S          = object$sample.stats$S,
-              nclus      = k, ngroups = g, n_cov_exo = object$sample.stats$n_cov_exo,
-              N_gs       = object$N_gs,
-              idx.beta   = idx.beta,
-              idx.psi    = idx.psi,
-              idx.psi_vec = idx.psi_vec,
-              idx.cons   = idx.cons,
-              idx.unco   = idx.unco,
-              idx.theta  = idx.theta,
-              vec_ind    = vec_ind)
+  SE_matrix <- SE.S2(x          = vector_SE,
+                     lambda_mat = object$param$lambda,
+                     theta_mat  = object$param$theta,
+                     beta_mat   = object$param$beta_ks,
+                     psi_mat    = object$param$psi_gks,
+                     pi_ks      = colMeans(object$posteriors),
+                     S          = object$sample.stats$S,
+                     nclus      = k, ngroups = g, n_cov_exo = object$sample.stats$n_cov_exo,
+                     N_gs       = object$N_gs,
+                     idx.beta   = idx.beta,
+                     idx.psi    = idx.psi,
+                     idx.psi_vec = idx.psi_vec,
+                     idx.cons   = idx.cons,
+                     idx.unco   = idx.unco,
+                     idx.theta  = idx.theta,
+                     vec_ind    = vec_ind)
 
   # SE Correction ---
-  Sigma_1 <- vcov(object$MM) # Extract Sigma step 1 directly from lavaan
+  Sigma_1 <- lavaan::vcov(object$MM) # Extract Sigma step 1 directly from lavaan
   Sigma_1 <- Sigma_1[, !duplicated(colnames(Sigma_1))] # Lavaan returns the constrained parameters duplicated. Remove them
   colnames(Sigma_1)[grepl(pattern = ".p", x = colnames(Sigma_1))] <- names(cons_vec) # Rename the constrained parameter names to the actual parameter
   colnames(Sigma_1)[grep(pattern = ".g", x = colnames(Sigma_1), invert = T)] <- paste0(colnames(Sigma_1)[grep(pattern = ".g", x = colnames(Sigma_1), invert = T)], ".g1") # Add g1 to the first group
@@ -276,15 +282,38 @@ se <- function(object){
 
   I_22.inv <- MASS::ginv(I_22, tol = 1e-06)
   Sigma_1  <- Sigma_1[step1.idx, step1.idx]
-  # browser()
+
 
   # APPLY THE CORRECTION (note: for now, it is not changing too much the results)
   Sigma_2_corrected <- diag(sqrt(I_22.inv + I_22.inv %*% I_21 %*% Sigma_1 %*% t(I_21) %*% I_22.inv))
+  Sigma_2_corrected <- setNames(object = Sigma_2_corrected, nm = colnames(HESS[step2.idx, step2.idx]))
+  betas_se_corrected <- Sigma_2_corrected[grepl("^[^~]*~[^~]*$", names(Sigma_2_corrected))]
 
-  # Add the corrected values to the final results
-  SE$corrected <- setNames(object = Sigma_2_corrected, nm = colnames(HESS[step2.idx, step2.idx]))
 
-  return(list(SE = SE, HESS = HESS, est_vec = x, se_vector = vector_SE))
+  # Organize results in vector form -----------------------------------
+  SE_vector <- list(
+    lambda_se  =  c(vector_SE[vec_ind[[1]]], vector_SE[vec_ind[[2]]]),
+    thetas_se  = vector_SE[vec_ind[[3]]],
+    betas_se   = vector_SE[vec_ind[[4]]],
+    g.covs_se  = vector_SE[vec_ind[[5]]],
+    gk.covs_se = vector_SE[vec_ind[[6]]],
+    betas_se_corrected = betas_se_corrected
+  )
+
+  estimates_vector <- list(
+    lambda_est  = c(x[vec_ind[[1]]], x[vec_ind[[2]]]),
+    thetas_est  = x[vec_ind[[3]]],
+    betas_est   = x[vec_ind[[4]]],
+    g.covs_est  = x[vec_ind[[5]]],
+    gk.covs_est = x[vec_ind[[6]]]
+  )
+
+  return(list(
+    SE_vector = SE_vector,
+    SE_matrix = SE_matrix,
+    HESS = HESS,
+    estimates_vector = estimates_vector)
+    )
 }
 
 # Objective function for the Hessian ---------------------------------------------------------------
@@ -319,7 +348,7 @@ obj.S2 <- function(x, lambda_mat, theta_mat,
 
   # Relocating theta
   g.theta.idx <- length(thetas)/ngroups
-  # browser()
+
   for(g in 1:ngroups){
     theta_vec <- thetas[(((g - 1)*g.theta.idx) + 1):(g.theta.idx*g)]
     theta_mat[[g]][idx.theta] <- theta_vec
@@ -397,7 +426,7 @@ compute_hessian <- function(f, x, d = 1e-5,
                             idx.cons, idx.unco, idx.theta,
                             idx.beta, idx.psi, idx.psi_vec,
                             n_cov_exo, vec_ind) {
-  # browser()
+
   n  <- length(x)
   H  <- matrix(0, n, n)
   colnames(H) <- rownames(H) <- names(x)
