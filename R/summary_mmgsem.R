@@ -1,3 +1,10 @@
+#' Summary function for mmgsem
+#'
+#' Summarizes the most important information of the results from a MMG-SEM model
+#'
+#' @param model Resulting object from a mmgsem model (must be a list). It can also be the resulting object from the ModelSelection() function.
+#' @param se Must be the resulting object from the se() function of the mmgsem package. If included, the summary function will return the hypothesis testing of the relevant parameters (regressions).
+
 #' @export
 summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
   if (!is.list(model)) {

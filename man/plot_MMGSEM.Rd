@@ -4,7 +4,7 @@
 \alias{plot_MMGSEM}
 \title{Plot model selection results}
 \usage{
-plot_MMGSEM(ModelSel)
+plot_MMGSEM(ModelSel, criteria)
 }
 \arguments{
 \item{ModelSel}{Object returned from the ModelSel() function.}
