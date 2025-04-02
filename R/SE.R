@@ -174,7 +174,7 @@ se <- function(object){
                           idx.unco   = idx.unco,
                           idx.theta  = idx.theta,
                           vec_ind    = vec_ind)
-
+return(HESS)
   # (4) Organize the SE for each parameter
   vector_SE <- setNames(diag(sqrt(MASS::ginv(-HESS, tol = 1e-06))), colnames(HESS)) # The SE comes from the inverse of the negative hessian
 
@@ -426,7 +426,7 @@ compute_hessian <- function(f, x, d = 1e-5,
                             idx.cons, idx.unco, idx.theta,
                             idx.beta, idx.psi, idx.psi_vec,
                             n_cov_exo, vec_ind) {
-
+browser()
   n  <- length(x)
   H  <- matrix(0, n, n)
   colnames(H) <- rownames(H) <- names(x)

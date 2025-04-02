@@ -1513,6 +1513,307 @@ Step2 <- function(ngroups             = ngroups,
   )
 }
 
+# Slow Step 2 function ----------------------------------------------------------------------
+# Proper estimation for MMG-SEM (Modeling all possible group-cluster combinations).
+# Previously deprecated due to its slow computation (lavaan's issue when many groups are involved)
+# Recovered as our faster estimation CANNOT handle covariance between endogenous 2 factors
+# ONLY USED when a covariance between endogenous 2 factors is required
+Step2_slow <- function(cov_eta,
+                       ngroups,
+                       nclus,
+                       N_gs,
+                       S2,
+                       exog,
+                       endog){
+  # Create a dummy Step 2 parameter table.
+  fake_cov        <- rep(cov_eta, nclus) # Duplicate factor's covariances to match the number of clusters
+  names(fake_cov) <- paste("group", seq_len(gro_clu))
+  fake_model      <- lavaan::parTable(lavaan::sem(model = S2,
+                                                  sample.cov = fake_cov,
+                                                  sample.nobs = rep(N_gs, nclus),
+                                                  do.fit = FALSE,
+                                                  meanstructure = F
+                                                  ))
+
+  # Update parameter table with only needed free parameters
+  fake_model$par     <- paste0(fake_global$lhs, fake_global$op, fake_global$rhs, ".g", fake_global$group) # Add a parameter column
+  fake_model$cluster <- rep(1:nclus, each = length(fake_global$id[fake_global$group %in% 1:ngroups]))     # Add cluster column
+
+  # Remove unnecessary columns from fake_global
+  fake_model$se      <- NULL
+  fake_model$cluster <- NULL
+  fake_model$par     <- NULL
+  fake_model$est     <- NULL
+
+  # Add constraints, "normal" approach
+  # Start the process to add cluster constraints
+  # Create a constraint entry in the lavaan format
+  constraints_row <- data.frame(
+    id = "", lhs = "", op = "==", rhs = "",
+    user = 2, block = 0, group = 0, free = 0,
+    ustart = NA, exo = 0, label = "", plabel = "",
+    cluster = NA
+  )
+
+  # constraints object refer to regression parameters constraints.
+  # cons_exo_cov object refer to covariance parameters of exogenous variables (should be group-specific)
+
+  # Identify regression parameters
+  constraints <- fake_model$plabel[which(fake_model$op == "~")] # Get the regression parameters
+  n_reg       <- length(fake_model$plabel[which(fake_model$op == "~" & fake_model$group == 1)]) # Number of reg PER GROUP
+
+
+  # Identify independent latent variables in the model
+  # Labels of the variance parameters of variables in exo
+  cons_exo <- fake_model$plabel[which(fake_model$op == "~~" & fake_model$lhs %in% exog)]
+  # Number of variance parameters that involve variables in exo PER GROUP
+  n_exo    <- length(fake_model$plabel[which(fake_model$op == "~~" &
+                                               fake_model$lhs %in% exog & fake_model$group == 1)])
+
+  # Create matrices with the necessary constraints entries
+  constraints_matrix <- constraints_row[rep(
+    x = 1:nrow(constraints_row),
+    times = (length(constraints))
+  ), ]
+
+  cons_exo_matrix <- constraints_row[rep(
+    x = 1:nrow(constraints_row),
+    times = (length(cons_exo))
+  ), ]
+
+  rownames(constraints_matrix) <- NULL
+  rownames(cons_exo_matrix)    <- NULL
+
+  # Get a cluster label for all groups (all combinations group*cluster)
+  clus_label  <- rep(x = 1:nclus, each = ngroups)
+  group_label <- rep(x = 1:ngroups, times = nclus)
+
+  # Add cluster labels to the parameter table (not necessary, just for me)
+  for (j in 1:length(clus_label)) {
+    fake_model$cluster[fake_model$group == j] <- clus_label[j]
+  }
+
+  # Repeat each cluster label depending on the number of parameters per group.
+  # i.e. Label each parameter per cluster
+  reg_labels <- rep(clus_label, each = n_reg) # regressions
+  exo_labels <- rep(group_label, each = n_exo) # variance of endog1
+
+  # Add constraints per cluster (i.e. regression parameters are equal within cluster)
+  for (k in 1:nclus) {
+    # Regression constraints
+    cluster_par <- constraints[reg_labels == k] # Identify regression parameters of cluster k
+    constraints_matrix[(reg_labels == k), "lhs"] <- cluster_par[1:n_reg] # On the left hand side insert parameters of ONE group
+    constraints_matrix[(reg_labels == k), "rhs"] <- cluster_par          # On the right hand side insert parameters of all groups
+  }
+
+  # Add constraints per group (i.e., exo covs are equal within a group - NOT a group-cluster parameter)
+  for(g in 1:ngroups){
+    # Variances constraints (exo)
+    group_par_exo <- cons_exo[exo_labels == g]
+    cons_exo_matrix[(exo_labels == g), "lhs"] <- group_par_exo[1:n_exo]
+    cons_exo_matrix[(exo_labels == g), "rhs"] <- group_par_exo
+  }
+
+  # Remove redundant constraints (e.g., p1 == p1)
+  constraints_total <- rbind(constraints_matrix, cons_exo_matrix)
+  redundant <- which(constraints_total$lhs == constraints_total$rhs) # Identify redundant
+  constraints_total <- constraints_total[-redundant, ]
+  rownames(constraints_total) <- NULL
+
+  # Bind the model table with the constraints
+  # browser()
+  fake_model <- rbind(fake_model, constraints_total)
+
+  # ESTIMATION STEP 2 (EM algorithm) ----------------------------------------------------
+  # Multi-start
+  for (s in 1:nstarts) {
+    if (printing == T) {
+      print(paste("Start", s, "-----------------"))
+    }
+
+    # Random Start
+    if (!is.null(userStart)) {
+      # In case the user inputs a pre-defined start, use it for z_gks
+      z_gks <- userStart
+    } else if (partition == "hard") {
+      # Create initial random partition. Hard partition. (z_gks)
+      cl <- 0
+      while (cl < 1) { # "while loop" to make sure all clusters get at least one group
+        z_gks <- t(replicate(ngroups, sample(x = c(rep(0, (nclus - 1)), 1))))
+        cl <- min(colSums(z_gks))
+      }
+    } else if (partition == "soft") {
+      z_gks <- matrix(data = runif(n = c(nclus * ngroups)), ncol = nclus, nrow = ngroups)
+      z_gks <- z_gks / rowSums(z_gks)
+    }
+
+    # Initialize psi_gks
+    psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+
+    # Prepare objects for the while loop
+    i <- 0 # iteration initialization
+    prev_LL <- 0 # previous loglikelihood initialization
+    diff_LL <- 1 # Set a diff of 1 just to start the while loop
+    log_test <- T # TEMPORARY - To check if there is decreasing loglikelihood
+
+    # Run full-convergence multi-start
+    while (diff_LL > 1e-6 & i < max_it & isTRUE(log_test)) {
+      i <- i + 1
+      pi_ks <- colMeans(z_gks) # Prior probabilities
+      N_gks <- z_gks * N_gs # Sample size per group-cluster combination
+      N_gks <- c(N_gks)
+
+      # M-Step ---------
+      # PARAMETER ESTIMATION
+      # Call lavaan to estimate the structural parameters
+      # the 'groups' are the clusters
+      # Note: this makes all resulting parameters to be cluster-specific (it is reconstructed later)
+      if (i == 1) {
+        s2out <- sem(
+          model = fake_model,    # 'fake' partable with duplicated parameters and so on
+          sample.cov = fake_cov, # 'fake' duplicated factors' cov matrix (repeated by the number of clusters)
+          sample.nobs = N_gks,   # Sample size per group-cluster combination weighted by the posteriors
+          baseline = FALSE, se = "none",
+          h1 = FALSE, check.post = FALSE,
+          control = list(rel.tol = 1e-06),
+          sample.cov.rescale = FALSE,
+          fixed.x = FALSE
+        ) # , control = list(max.iter = 50))
+      } else {
+        s2out <- sem(
+          model = fake_model,    # 'fake' partable with duplicated parameters and so on
+          sample.cov = fake_cov, # 'fake' duplicated factors' cov matrix (repeated by the number of clusters)
+          sample.nobs = N_gks,   # Sample size per group-cluster combination weighted by the posteriors
+          start = start,         # Use final estimations from the previous iteration as starting point for this one
+          baseline = FALSE, se = "none",
+          h1 = FALSE, check.post = FALSE,
+          control = list(rel.tol = 1e-06),
+          sample.cov.rescale = FALSE,
+          fixed.x = FALSE
+        ) # , control = list(max.iter = 50))
+      }
+
+      # Save parameters from previous iteration (this should speed up the estimation)
+      start <- partable(s2out)$est
+
+      # compute loglikelihood for all group/cluster combinations
+      # Initialize matrices to store loglikelihoods
+      loglik_gks  <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+      loglik_gksw <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+      gk <- 0
+
+      # Prepare Sigma
+      # Initialize the object for estimating Sigma
+      Sigma <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+      I <- diag(length(lat_var)) # Identity matrix based on number of latent variables. Used later
+
+      for (k in 1:nclus) {
+        # Previous matrices were only cluster-specific. We have to reconstruct the group-specific matrices (psi and sigma)
+
+        ## Save the cluster-specific psi and beta
+        ## ifelse() in case of only 1 cluster
+        ifelse(test = (nclus == 1), yes = (psi <- psi_ks), no = (psi <- psi_ks[[k]]))
+        ifelse(test = (nclus == 1), yes = (beta <- beta_ks), no = (beta <- beta_ks[[k]]))
+        for (g in 1:ngroups) {
+          # Reconstruct psi and sigma so they are group- and cluster-specific again.
+          # Replace the group-specific part of psi
+          # Exogenous (co)variance is always group-specific
+          psi[exog, exog] <- cov_eta[[g]][exog, exog] # Replace the group-specific part
+
+          # If the user required group-specific endogenous covariances (endo_group_specific = T), do:
+          if (endo_group_specific == T) {
+            # Take into account the effect of the cluster-specific regressions
+            # cov_eta[[g]] = solve(I - beta) %*% psi %*% t(solve(I - beta))
+            # If we solve for psi, then:
+            solved_psi <- ((I - beta) %*% cov_eta[[g]] %*% t((I - beta))) # Extract group-specific endog cov
+
+            # Replace endog 1
+            g_endog1_cov <- solved_psi[endog1, endog1]
+            if (length(endog1) > 1) { # Remove cov between endog 1 variables
+              g_endog1_cov[row(g_endog1_cov) != col(g_endog1_cov)] <- 0
+            }
+            psi[endog1, endog1] <- g_endog1_cov
+
+            # Replace endog 2
+            g_endog2_cov <- solved_psi[endog2, endog2] # Extract group-specific endog cov
+            psi[endog2, endog2] <- g_endog2_cov
+          }
+
+          # If required by the user, set to 0 the covariance between endog 2 factors
+          if (isFALSE(endogenous_cov)) {
+            psi[endog2, endog2][row(psi[endog2, endog2]) != col(psi[endog2, endog2])] <- 0
+          }
+
+          ###### EXPERIMENT ######
+          # If ordered = T force the variance of the factors to be 1 (to follow the scaling from step 1)
+          if (std.lv == T){
+            diag(psi) <- 1
+          }
+
+          # Store for future check
+          psi_gks[[g, k]] <- psi
+
+          # Get log-likelihood by comparing factor covariance matrix of step 1 (cov_eta) and step 2 (Sigma)
+          # Estimate Sigma (factor covariance matrix of step 2)
+          Sigma[[g, k]] <- solve(I - beta) %*% psi %*% t(solve(I - beta))
+          Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
+
+          # Estimate the loglikelihood
+          loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+            sample.mean = rep(0, nrow(cov_eta[[1]])),
+            sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+            # sample.nobs = N_gks[g, k],
+            sample.cov  = cov_eta[[g]], # Factor covariance matrix from step 1
+            Mu          = rep(0, nrow(cov_eta[[1]])),
+            Sigma       = Sigma[[g, k]] # Factor covariance matrix from step 2
+          )
+
+          loglik_gks[g, k] <- loglik_gk
+          loglik_gksw[g, k] <- log(pi_ks[k]) + loglik_gk # weighted loglik
+
+        } # ngroups
+      } # cluster
+
+      # Get total loglikelihood
+      # First, deal with arithmetic underflow by subtracting the maximum value per group
+      max_gs <- apply(loglik_gksw, 1, max) # Get max value per row
+      minus_max <- sweep(x = loglik_gksw, MARGIN = 1, STATS = max_gs, FUN = "-") # Subtract the max per row
+      exp_loglik <- exp(minus_max) # Exp before summing for total loglikelihood
+      loglik_gsw <- log(apply(exp_loglik, 1, sum)) # Sum exp_loglik per row and then take the log again
+      LL <- sum((loglik_gsw + max_gs)) # Add the maximum again and then sum them all for total loglikelihood
+
+      # Now, do E-step
+      E_out <- EStep(
+        pi_ks = pi_ks, ngroup = ngroups,
+        nclus = nclus, loglik = loglik_gks
+      )
+
+      z_gks <- E_out
+      diff_LL <- abs(LL - prev_LL)
+      log_test <- prev_LL < LL | isTRUE(all.equal(prev_LL, LL))
+      if (i == 1) {
+        log_test <- T
+      }
+      if (log_test == F) {
+        print(paste("Start", s, "; Iteration", i, "-------"))
+        print(paste("Difference", LL - prev_LL))
+      } # ; browser()}
+      log_test <- T
+      prev_LL <- LL
+      if (printing == T) {
+        print(i)
+        print(LL)
+      }
+    }
+
+    results_nstarts[[s]] <- s2out
+    z_gks_nstarts[[s]]   <- z_gks
+    loglik_nstarts[s]    <- LL
+    iter_nstarts[s]      <- i
+  } # multistart
+
+  }
+
 # Reordering functions -----------------------------------------------------------------------------
 # Create a function to reorder matrices (used later). Done due to:
 # (1) It allows us to organize the matrices in an easier to understand order. Exogenous variables first, and endogeonus later.
@@ -1587,4 +1888,9 @@ EStep <- function(pi_ks, ngroup, nclus, loglik){
 
   return(z_gks)
 }
+
+
+
+
+
 
