@@ -199,7 +199,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
       cov_eta[[g]] <- lavaan::cor2cov(R = cov_eta[[g]], sds = sds)
     }
   }
-  browser()
+
   # STEP 2 (EM algorithm for model estimation) -----------------------------------------------------
   SM <- Step2(ngroups             = ngroups,
               nclus               = nclus,
@@ -594,7 +594,7 @@ Step2 <- function(ngroups             = ngroups,
                   printing            = printing,
                   s1ori               = s1ori){
 
-  # browser()
+
   # Do a fake sem() to obtain the correct settings to use in Step 2
   # just a single sample cov!
   fake <- lavaan::sem(
@@ -680,7 +680,7 @@ Step2 <- function(ngroups             = ngroups,
       beta_ks <- reorder(beta_ks)
     } else if (nclus != 1) {
       beta_ks <- lapply(1:nclus, function(x) {
-        reorder(beta_ks[[x]])
+        reorder(x = beta_ks[[x]], exog = exog, endog = endog)
       }) # Does not work with only one cluster
     }
 
@@ -688,7 +688,8 @@ Step2 <- function(ngroups             = ngroups,
     # Put them in a matrix of matrices (right now is a list)
     psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
     for(gk in 1:(ngroups*nclus)){
-      psi_gks[[gk]] <- psi_gks_tmp[[gk]]
+      psi_gks_tmp[[gk]] <- reorder(x = psi_gks_tmp[[gk]], exog = exog, endog = endog)
+      psi_gks[[gk]]     <- psi_gks_tmp[[gk]]
     }
 
     # Return the most important results
@@ -852,7 +853,7 @@ Step2 <- function(ngroups             = ngroups,
 }
 
 
-# Fast Step 2 function ----------------------------------------------------------------------
+# Fast Step 2 function -------------------------------------------------------------------------------------------------
 # Step 2 function using the trick to speed things up
 Step2_fast <- function(ngroups             = ngroups,
                        nclus               = nclus,
@@ -1389,6 +1390,9 @@ Step2_slow <- function(ngroups             = ngroups,
                        s1ori               = s1ori){
 
 
+  # Necessary objects
+  gro_clu <- nclus*ngroups
+
   # Create a dummy Step 2 parameter table.
   fake_cov        <- rep(cov_eta, nclus) # Duplicate factor's covariances to match the number of clusters
   names(fake_cov) <- paste("group", seq_len(gro_clu))
@@ -1413,14 +1417,15 @@ Step2_slow <- function(ngroups             = ngroups,
   exog <- lat_var[!c(lat_var %in% endog)]
 
   # Update parameter table with only needed free parameters
-  fake_model$par     <- paste0(fake_global$lhs, fake_global$op, fake_global$rhs, ".g", fake_global$group) # Add a parameter column
-  fake_model$cluster <- rep(1:nclus, each = length(fake_global$id[fake_global$group %in% 1:ngroups]))     # Add cluster column
+  fake_model$par     <- paste0(fake_model$lhs, fake_model$op, fake_model$rhs, ".g", fake_model$group) # Add a parameter column
+  fake_model$cluster <- rep(1:nclus, each = length(fake_model$id[fake_model$group %in% 1:ngroups]))     # Add cluster column
 
   # Remove unnecessary columns from fake_global
   fake_model$se      <- NULL
   fake_model$cluster <- NULL
   fake_model$par     <- NULL
   fake_model$est     <- NULL
+  fake_model$start   <- NULL
 
   # Add constraints, "normal" approach
   # Start the process to add cluster constraints
@@ -1500,6 +1505,8 @@ Step2_slow <- function(ngroups             = ngroups,
   # Bind the model table with the constraints
   # browser()
   fake_model <- rbind(fake_model, constraints_total)
+  fake_model$cluster <- NULL
+  fake_model$free <- 1:nrow(fake_model)
 
   # ESTIMATION STEP 2 (EM algorithm) ----------------------------------------------------
   # Multi-start
@@ -1563,7 +1570,7 @@ Step2_slow <- function(ngroups             = ngroups,
           sample.nobs = N_gks,   # Sample size per group-cluster combination weighted by the posteriors
           baseline = FALSE, se = "none",
           h1 = FALSE, check.post = FALSE,
-          control = list(rel.tol = 1e-06),
+          control = list(rel.tol = 1e-09),
           sample.cov.rescale = FALSE,
           fixed.x = FALSE
         ) # , control = list(max.iter = 50))
@@ -1657,9 +1664,7 @@ Step2_slow <- function(ngroups             = ngroups,
     endog           = endog,
     exog            = exog,
     endog1          = endog1,
-    endog2          = endog2,
-    beta_ks         = beta_ks,
-    psi_ks          = psi_ks)
+    endog2          = endog2)
   )
 }
 
