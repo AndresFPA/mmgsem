@@ -624,72 +624,121 @@ Step2 <- function(ngroups             = ngroups,
   exog <- lat_var[!c(lat_var %in% endog)]
 
   if(length(endog2) > 1 & endogenous_cov == T){ # If there is a covariance between endogenous 2 variables, do the slow estimation
-    SM <- Step2_slow(ngroups             = ngroups,
-                     nclus               = nclus,
-                     nstarts             = nstarts,
-                     N_gs                = N_gs,
-                     seed                = seed,
-                     max_it              = max_it,
-                     cov_eta             = cov_eta,
-                     dat                 = dat,
-                     S2                  = S2,
-                     lat_var             = lat_var,
-                     ordered             = ordered,
-                     endo_group_specific = endo_group_specific,
-                     endogenous_cov      = endogenous_cov,
-                     lambda_gs           = lambda_gs,
-                     theta_gs            = theta_gs,
-                     S_unbiased          = S_unbiased,
-                     S1                  = S1,
-                     std.lv              = std.lv,
-                     partition           = partition,
-                     userStart           = userStart,
-                     printing            = printing,
-                     s1ori               = s1ori)
+    only_slow <- F
+    # EXPERIMENT WITH SLOW ESTIMATION
+    # Try first fast estimation (no covariance) and one extra iteration with slow estimation
+    if(isFALSE(only_slow)){
+      SM_1 <- Step2_fast(ngroups             = ngroups,
+                         nclus               = nclus,
+                         nstarts             = nstarts,
+                         N_gs                = N_gs,
+                         seed                = seed,
+                         max_it              = max_it,
+                         cov_eta             = cov_eta,
+                         dat                 = dat,
+                         S2                  = S2,
+                         lat_var             = lat_var,
+                         ordered             = ordered,
+                         endo_group_specific = endo_group_specific,
+                         endogenous_cov      = endogenous_cov,
+                         lambda_gs           = lambda_gs,
+                         theta_gs            = theta_gs,
+                         S_unbiased          = S_unbiased,
+                         S1                  = S1,
+                         std.lv              = std.lv,
+                         partition           = partition,
+                         userStart           = userStart,
+                         printing            = printing,
+                         s1ori               = s1ori)
 
-    results_nstarts <- SM$results_nstarts
-    z_gks_nstarts   <- SM$z_gks_nstarts
-    loglik_nstarts  <- SM$loglik_nstarts
-    iter_nstarts    <- SM$iter_nstarts
-    endog           <- SM$endog
-    exog            <- SM$exog
-    endog1          <- SM$endog1
-    endog2          <- SM$endog2
-    I               <- diag(length(lat_var))
+      results_nstarts <- SM_1$results_nstarts
+      z_gks_nstarts   <- SM_1$z_gks_nstarts
+      loglik_nstarts  <- SM_1$loglik_nstarts
+      iter_nstarts    <- SM_1$iter_nstarts
+      endog           <- SM_1$endog
+      exog            <- SM_1$exog
+      endog1          <- SM_1$endog1
+      endog2          <- SM_1$endog2
+      iter            <- SM_1$iter    # Best start number of iterations
+      z_gks           <- SM_1$z_gks   # Best start posteriors
+      LL              <- SM_1$LL      # Best start loglikelihood
+      s2out           <- SM_1$s2out
+      beta_ks         <- SM_1$beta_ks
+      psi_gks         <- SM_1$psi_gks
+      I               <- diag(length(lat_var))
 
-    # Get best fit and z_gks based on the loglikelihood
-    best_idx <- which.max(loglik_nstarts)
-    iter     <- iter_nstarts[best_idx]
-    s2out    <- results_nstarts[[best_idx]]
-    LL       <- loglik_nstarts[best_idx]
-    z_gks    <- z_gks_nstarts[[best_idx]]
-    colnames(z_gks) <- paste("Cluster", seq_len(nclus))
+      SM_2 <- Step2_slow(ngroups             = ngroups,
+                         nclus               = nclus,
+                         nstarts             = nstarts,
+                         N_gs                = N_gs,
+                         seed                = seed,
+                         max_it              = max_it,
+                         cov_eta             = cov_eta,
+                         dat                 = dat,
+                         S2                  = S2,
+                         lat_var             = lat_var,
+                         ordered             = ordered,
+                         endo_group_specific = endo_group_specific,
+                         endogenous_cov      = endogenous_cov,
+                         lambda_gs           = lambda_gs,
+                         theta_gs            = theta_gs,
+                         S_unbiased          = S_unbiased,
+                         S1                  = S1,
+                         std.lv              = std.lv,
+                         partition           = partition,
+                         userStart           = userStart,
+                         printing            = printing,
+                         s1ori               = s1ori,
+                         only_slow           = F,
+                         beta_ks             = beta_ks,
+                         psi_gks             = psi_gks)
 
-    # Extract matrices from final step 2 output
-    EST_s2      <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
-    beta_gks    <- lapply(EST_s2, "[[", "beta") # If slow is used, we would have beta parameters for all group-cluster combinations
-    psi_gks_tmp <- lapply(EST_s2, "[[", "psi")
+      z_gks           <- SM_2$z_gks   # Best start posteriors
+      LL              <- SM_2$LL      # Best start loglikelihood
+      s2out           <- SM_2$s2out
+      beta_ks         <- SM_2$beta_ks
+      psi_gks         <- SM_2$psi_gks
 
-    # Select useful betas
-    k.idx <- (seq_len(nclus) - 1) * ngroups + 1L
-    beta_ks <- beta_gks[k.idx]
 
-    # Re-order betas
-    if (nclus == 1) {
-      beta_ks <- beta_ks[[1]]
-      beta_ks <- reorder(beta_ks)
-    } else if (nclus != 1) {
-      beta_ks <- lapply(1:nclus, function(x) {
-        reorder(x = beta_ks[[x]], exog = exog, endog = endog)
-      }) # Does not work with only one cluster
-    }
+    } else if (isTRUE(only_slow)){
+      SM <- Step2_slow(ngroups             = ngroups,
+                       nclus               = nclus,
+                       nstarts             = nstarts,
+                       N_gs                = N_gs,
+                       seed                = seed,
+                       max_it              = max_it,
+                       cov_eta             = cov_eta,
+                       dat                 = dat,
+                       S2                  = S2,
+                       lat_var             = lat_var,
+                       ordered             = ordered,
+                       endo_group_specific = endo_group_specific,
+                       endogenous_cov      = endogenous_cov,
+                       lambda_gs           = lambda_gs,
+                       theta_gs            = theta_gs,
+                       S_unbiased          = S_unbiased,
+                       S1                  = S1,
+                       std.lv              = std.lv,
+                       partition           = partition,
+                       userStart           = userStart,
+                       printing            = printing,
+                       s1ori               = s1ori)
 
-    # Re-order psi
-    # Put them in a matrix of matrices (right now is a list)
-    psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
-    for(gk in 1:(ngroups*nclus)){
-      psi_gks_tmp[[gk]] <- reorder(x = psi_gks_tmp[[gk]], exog = exog, endog = endog)
-      psi_gks[[gk]]     <- psi_gks_tmp[[gk]]
+      results_nstarts <- SM$results_nstarts
+      z_gks_nstarts   <- SM$z_gks_nstarts
+      loglik_nstarts  <- SM$loglik_nstarts
+      iter_nstarts    <- SM$iter_nstarts
+      endog           <- SM$endog
+      exog            <- SM$exog
+      endog1          <- SM$endog1
+      endog2          <- SM$endog2
+      iter            <- SM$iter    # Best start number of iterations
+      z_gks           <- SM$z_gks   # Best start posteriors
+      LL              <- SM$LL      # Best start loglikelihood
+      s2out           <- SM$s2out
+      beta_ks         <- SM$beta_ks
+      psi_gks         <- SM$psi_gks
+      I               <- diag(length(lat_var))
     }
 
     # Return the most important results
@@ -739,101 +788,13 @@ Step2 <- function(ngroups             = ngroups,
     exog            <- SM$exog
     endog1          <- SM$endog1
     endog2          <- SM$endog2
+    iter            <- SM$iter    # Best start number of iterations
+    z_gks           <- SM$z_gks   # Best start posteriors
+    LL              <- SM$LL      # Best start loglikelihood
+    s2out           <- SM$s2out
     beta_ks         <- SM$beta_ks
-    psi_ks          <- SM$psi_ks
+    psi_gks         <- SM$psi_gks
     I               <- diag(length(lat_var))
-
-    # Get best fit and z_gks based on the loglikelihood
-    best_idx <- which.max(loglik_nstarts)
-    iter     <- iter_nstarts[best_idx]
-    s2out    <- results_nstarts[[best_idx]]
-    LL       <- loglik_nstarts[best_idx]
-    z_gks    <- z_gks_nstarts[[best_idx]]
-    colnames(z_gks) <- paste("Cluster", seq_len(nclus))
-
-    # Extract matrices from final step 2 output
-    if (isFALSE(endo_group_specific)) {
-      if (nclus == 1) {
-        EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
-        beta_ks <- EST_s2[["beta"]]
-        psi_ks  <- EST_s2[["psi"]]
-      } else if (nclus != 1) {
-        EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
-        beta_ks <- lapply(EST_s2, "[[", "beta")
-        psi_ks  <- lapply(EST_s2, "[[", "psi")
-      }
-    } else if (isTRUE(endo_group_specific)) {
-      EST_s2_lv <- vector(mode = "list", length = length(endog))
-      beta_ks_lv <- vector(mode = "list", length = length(endog))
-      psi_ks_lv <- vector(mode = "list", length = length(endog))
-      for (lv in 1:length(endog)) {
-        if (nclus == 1) {
-          EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
-          beta_ks_lv[[lv]] <- EST_s2_lv[[lv]][["beta"]]
-          psi_ks_lv[[lv]]  <- EST_s2_lv[[lv]][["psi"]]
-        } else if (nclus != 1) {
-          EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
-          beta_ks_lv[[lv]] <- lapply(EST_s2_lv[[lv]], "[[", "beta") # Does not work with only one cluster
-          psi_ks_lv[[lv]]  <- lapply(EST_s2_lv[[lv]], "[[", "psi")
-        }
-      }
-
-      # Re-construct beta_ks
-      for (k in 1:nclus) {
-        for (lv in 1:length(endog)) {
-          this_lv <- endog[lv]
-          col.idx <- colnames(beta_ks_lv[[lv]][[k]])
-          if (nclus == 1) {
-            beta_ks[this_lv, col.idx] <- beta_ks_lv[[lv]][this_lv, col.idx]
-          } else if (nclus != 1) {
-            beta_ks[[k]][this_lv, col.idx] <- beta_ks_lv[[lv]][[k]][this_lv, col.idx]
-          }
-        }
-      }
-    }
-
-    # Re-order betas
-    if (nclus == 1) {
-      beta_ks <- reorder(beta_ks, exog = exog, endog = endog)
-    } else if (nclus != 1) {
-      beta_ks <- lapply(1:nclus, function(x) {
-        reorder(beta_ks[[x]], exog = exog, endog = endog)
-      }) # Does not work with only one cluster
-    }
-
-    # Get the group- and cluster-specific psi_gks matrices
-    psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
-
-    for (k in 1:nclus) {
-      ifelse(test = (nclus == 1), yes = (psi_k <- psi_ks), no = (psi_k <- psi_ks[[k]]))
-      ifelse(test = (nclus == 1), yes = (beta <- beta_ks), no = (beta <- beta_ks[[k]]))
-      for (g in 1:ngroups) {
-        psi_gks[[g, k]] <- psi_k
-        psi_gks[[g, k]][exog, exog] <- cov_eta[[g]][exog, exog]
-
-        # If the user required group-specific endogenous covariances (endo_group_specific = T), do:
-        if (endo_group_specific == T) {
-          # Take into account the effect of the cluster-specific regressions
-          # cov_eta[[g]] = solve(I - beta) %*% psi %*% t(solve(I - beta))
-          # If we solve for psi, then:
-          g_endog1_cov <- ((I - beta) %*% cov_eta[[g]] %*% t((I - beta)))[endog1, endog1] # Extract group-specific endog cov
-          if (length(endog1) > 1) {
-            g_endog1_cov[row(g_endog1_cov) != col(g_endog1_cov)] <- 0
-          }
-          # browser()
-          psi_gks[[g, k]][endog1, endog1] <- g_endog1_cov
-
-          g_endog2_cov <- ((I - beta) %*% cov_eta[[g]] %*% t((I - beta)))[endog2, endog2] # Extract group-specific endog cov
-          psi_gks[[g, k]][endog2, endog2] <- g_endog2_cov
-        }
-
-        # If required by the user, endog2 covariances are set to 0
-        if (isFALSE(endogenous_cov)) {
-          offdiag <- row(psi_gks[[g, k]][endog2, endog2]) != col(psi_gks[[g, k]][endog2, endog2])
-          psi_gks[[g, k]][endog2, endog2][offdiag] <- 0
-        }
-      } # groups
-    } # cluster
 
     # Return the most important results
     return(list(
@@ -896,17 +857,33 @@ Step2_fast <- function(ngroups             = ngroups,
 
   # browser()
   # Do a fake sem() to obtain the correct settings to use in Step 2
+  # The fake sem object determines which model we actually fit. All important setting must be done here!
   # just a single sample cov!
-  fake <- lavaan::sem(
-    model = S2, sample.cov = rep(cov_eta[1], nclus),
-    sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
-    baseline = FALSE,
-    h1 = FALSE, check.post = FALSE,
-    loglik = FALSE,
-    sample.cov.rescale = FALSE,
-    fixed.x = TRUE,
-    information = "observed"
-  )
+  if(isTRUE(endogenous_cov)){
+    fake <- lavaan::sem(
+      model = S2, sample.cov = rep(cov_eta[1], nclus),
+      sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
+      baseline = FALSE,
+      h1 = FALSE, check.post = FALSE,
+      loglik = FALSE,
+      sample.cov.rescale = FALSE,
+      fixed.x = TRUE,
+      information = "observed"
+    )
+  } else if (isFALSE(endogenous_cov)){
+    fake <- lavaan::sem(
+      model = S2, sample.cov = rep(cov_eta[1], nclus),
+      sample.nobs = rep(nrow(dat), nclus), do.fit = FALSE,
+      baseline = FALSE,
+      h1 = FALSE, check.post = FALSE,
+      loglik = FALSE,
+      sample.cov.rescale = FALSE,
+      fixed.x = TRUE,
+      auto.cov.y = FALSE,
+      information = "observed"
+    )
+  }
+
   FakeprTbl <- parTable(fake)
   fake@Options$do.fit <- TRUE
   fake@Options$se     <- "none"
@@ -1094,7 +1071,7 @@ Step2_fast <- function(ngroups             = ngroups,
           slotOptions       = fake@Options,
           slotParTable      = fake@ParTable,
           sample.cov        = COV,
-          sample.nobs       = rep(nrow(dat), nclus),
+          sample.nobs       = rep(nrow(dat), nclus)
           # slotModel       = slotModel,
           # slotData        = fake@Data,
           # slotSampleStats = fake@SampleStats
@@ -1346,17 +1323,116 @@ Step2_fast <- function(ngroups             = ngroups,
     iter_nstarts[s]      <- i
   } # multistart
 
+  # Organize object before returning
+  # Get best start, organize beta matrices, etc
+  # Get best fit and z_gks based on the loglikelihood
+  best_idx <- which.max(loglik_nstarts)
+  iter     <- iter_nstarts[best_idx]
+  s2out    <- results_nstarts[[best_idx]]
+  LL       <- loglik_nstarts[best_idx]
+  z_gks    <- z_gks_nstarts[[best_idx]]
+  colnames(z_gks) <- paste("Cluster", seq_len(nclus))
+
+  # Extract matrices from final step 2 output
+  if (isFALSE(endo_group_specific)) {
+    if (nclus == 1) {
+      EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
+      beta_ks <- EST_s2[["beta"]]
+      psi_ks  <- EST_s2[["psi"]]
+    } else if (nclus != 1) {
+      EST_s2  <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
+      beta_ks <- lapply(EST_s2, "[[", "beta")
+      psi_ks  <- lapply(EST_s2, "[[", "psi")
+    }
+  } else if (isTRUE(endo_group_specific)) {
+    EST_s2_lv <- vector(mode = "list", length = length(endog))
+    beta_ks_lv <- vector(mode = "list", length = length(endog))
+    psi_ks_lv <- vector(mode = "list", length = length(endog))
+    for (lv in 1:length(endog)) {
+      if (nclus == 1) {
+        EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
+        beta_ks_lv[[lv]] <- EST_s2_lv[[lv]][["beta"]]
+        psi_ks_lv[[lv]]  <- EST_s2_lv[[lv]][["psi"]]
+      } else if (nclus != 1) {
+        EST_s2_lv[[lv]]  <- lavaan::lavInspect(s2out[[lv]], "est", add.class = TRUE, add.labels = TRUE)
+        beta_ks_lv[[lv]] <- lapply(EST_s2_lv[[lv]], "[[", "beta") # Does not work with only one cluster
+        psi_ks_lv[[lv]]  <- lapply(EST_s2_lv[[lv]], "[[", "psi")
+      }
+    }
+
+    # Re-construct beta_ks
+    for (k in 1:nclus) {
+      for (lv in 1:length(endog)) {
+        this_lv <- endog[lv]
+        col.idx <- colnames(beta_ks_lv[[lv]][[k]])
+        if (nclus == 1) {
+          beta_ks[this_lv, col.idx] <- beta_ks_lv[[lv]][this_lv, col.idx]
+        } else if (nclus != 1) {
+          beta_ks[[k]][this_lv, col.idx] <- beta_ks_lv[[lv]][[k]][this_lv, col.idx]
+        }
+      }
+    }
+  }
+
+  # Re-order betas
+  if (nclus == 1) {
+    beta_ks <- reorder(beta_ks, exog = exog, endog = endog)
+  } else if (nclus != 1) {
+    beta_ks <- lapply(1:nclus, function(x) {
+      reorder(beta_ks[[x]], exog = exog, endog = endog)
+    }) # Does not work with only one cluster
+  }
+
+  # Get the group- and cluster-specific psi_gks matrices
+  psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+
+  for (k in 1:nclus) {
+    ifelse(test = (nclus == 1), yes = (psi_k <- psi_ks), no = (psi_k <- psi_ks[[k]]))
+    ifelse(test = (nclus == 1), yes = (beta <- beta_ks), no = (beta <- beta_ks[[k]]))
+    for (g in 1:ngroups) {
+      psi_gks[[g, k]] <- psi_k
+      psi_gks[[g, k]][exog, exog] <- cov_eta[[g]][exog, exog]
+
+      # If the user required group-specific endogenous covariances (endo_group_specific = T), do:
+      if (endo_group_specific == T) {
+        # Take into account the effect of the cluster-specific regressions
+        # cov_eta[[g]] = solve(I - beta) %*% psi %*% t(solve(I - beta))
+        # If we solve for psi, then:
+        g_endog1_cov <- ((I - beta) %*% cov_eta[[g]] %*% t((I - beta)))[endog1, endog1] # Extract group-specific endog cov
+        if (length(endog1) > 1) {
+          g_endog1_cov[row(g_endog1_cov) != col(g_endog1_cov)] <- 0
+        }
+        # browser()
+        psi_gks[[g, k]][endog1, endog1] <- g_endog1_cov
+
+        g_endog2_cov <- ((I - beta) %*% cov_eta[[g]] %*% t((I - beta)))[endog2, endog2] # Extract group-specific endog cov
+        psi_gks[[g, k]][endog2, endog2] <- g_endog2_cov
+      }
+
+      # If required by the user, endog2 covariances are set to 0
+      if (isFALSE(endogenous_cov)) {
+        offdiag <- row(psi_gks[[g, k]][endog2, endog2]) != col(psi_gks[[g, k]][endog2, endog2])
+        psi_gks[[g, k]][endog2, endog2][offdiag] <- 0
+      }
+    } # groups
+  } # cluster
+
+  # Return all the important elements
   return(list(
     results_nstarts = results_nstarts,
     z_gks_nstarts   = z_gks_nstarts,
     loglik_nstarts  = loglik_nstarts,
     iter_nstarts    = iter_nstarts,
+    iter            = iter,
+    z_gks           = z_gks,
+    LL              = LL,
+    s2out           = s2out,
     endog           = endog,
     exog            = exog,
     endog1          = endog1,
     endog2          = endog2,
     beta_ks         = beta_ks,
-    psi_ks          = psi_ks)
+    psi_gks         = psi_gks)
   )
 }
 
@@ -1387,7 +1463,10 @@ Step2_slow <- function(ngroups             = ngroups,
                        partition           = partition,
                        userStart           = userStart,
                        printing            = printing,
-                       s1ori               = s1ori){
+                       s1ori               = s1ori,
+                       only_slow           = only_slow,
+                       beta_ks,
+                       psi_gks){
 
 
   # Necessary objects
@@ -1505,8 +1584,59 @@ Step2_slow <- function(ngroups             = ngroups,
   # Bind the model table with the constraints
   # browser()
   fake_model <- rbind(fake_model, constraints_total)
-  fake_model$cluster <- NULL
   fake_model$free <- 1:nrow(fake_model)
+
+  # Addition EXPERIMENT
+  # Run only one extra iteration (slow estimation) after running everything without covariances (fast estimation)
+  if(isFALSE(only_slow)){
+    # Get structural model parameter table
+    fake_model$parK <- paste0(fake_model$lhs, fake_model$op, fake_model$rhs, ".k", fake_model$cluster)
+
+    # Add the estimates of the structural parameters as start of the fake_model table
+    # Extract the regression parameters in a vector
+    # Regressions (Cluster-specific!)
+    beta_vec <- c() # Empty vector for the betas
+    beta_nam <- c() # Empty vector for the names of such betas (not truly necessary, but makes everything easier to understand)
+
+    # The loop identifies the non-zero parameters (i.e., the free parameters) in the beta matrices
+    # It also saves the number of the parameter using the col and row names of the beta matrices (e.g., F3 ~ F1)
+    for(k in 1:nclus){
+      ifelse(test = (nclus == 1), yes = (beta <- beta_ks), no = (beta <- beta_ks[[k]]))
+      non_zer.idx <- which(unlist(beta) != 0)
+      beta_vec <- c(beta_vec, unlist(beta)[non_zer.idx])
+      beta_nam <- c(beta_nam, as.vector(outer(X = rownames(beta),
+                                              Y = colnames(beta),
+                                              function(x, y) paste0(x, "~", y, ".k", k)))[non_zer.idx])
+    }
+
+    beta_vec <- setNames(object = beta_vec, nm = beta_nam) # Name the vector (the .1 and .2 represent the cluster)
+    beta.idx <- match(fake_model$parK, names(beta_vec)) # Indices of beta_vec in fake_global
+    fake_global$ustart <- ifelse(test = !is.na(beta.idx), yes = beta_vec[beta.idx], no = fake_global$ustart)
+
+    # Factor covariances (Group-cluster specific!)
+    cov_vec <- c() # Empty vector for the covariances
+    cov_nam <- c() # Empty vector for the names of such covs
+
+    # The loop is similar the one of the betas.
+    # Note there is an extra index (i.e., unique.idx). Given that the cov matrix is symmetric, some parameters are repeated.
+    # However, even if repeated, it is only one parameter. The unique.idx removes the repeated parameter.
+    gk <- 0
+    for(k in 1:nclus){
+      for(g in 1:ngroups){
+        gk <- gk + 1
+        non_zer.idx <- which(unlist(psi_gks[[g, k]]) != 0)
+        unique.idx  <- !duplicated(unlist(psi_gks[[g, k]])[non_zer.idx])
+        cov_vec <- c(cov_vec, unlist(psi_gks[[g, k]])[non_zer.idx][unique.idx])
+        cov_nam <- c(cov_nam, as.vector(outer(X = rownames(psi_gks[[g, k]]),
+                                              Y = colnames(psi_gks[[g, k]]),
+                                              function(x, y) paste0(y, "~~", x, ".g", gk)))[non_zer.idx][unique.idx])
+      }
+    }
+
+    cov_vec <- setNames(object = cov_vec, nm = cov_nam) # Name the vector (the number after the . is the group)
+    cov.idx <- match(fake_global$par, names(cov_vec)) # Indices of cov_vec in fake_global
+    fake_global$ustart <- ifelse(test = !is.na(cov.idx), yes = cov_vec[cov.idx], no = fake_global$ustart)
+  }
 
   # ESTIMATION STEP 2 (EM algorithm) ----------------------------------------------------
   # Multi-start
@@ -1655,16 +1785,58 @@ Step2_slow <- function(ngroups             = ngroups,
     iter_nstarts[s]      <- i
   } # multistart
 
+  # Organize output to return (select best start, organize beta matrices, etc.)
+  # Get best fit and z_gks based on the loglikelihood
+  best_idx <- which.max(loglik_nstarts)
+  iter     <- iter_nstarts[best_idx]
+  s2out    <- results_nstarts[[best_idx]]
+  LL       <- loglik_nstarts[best_idx]
+  z_gks    <- z_gks_nstarts[[best_idx]]
+  colnames(z_gks) <- paste("Cluster", seq_len(nclus))
+
+  # Extract matrices from final step 2 output
+  EST_s2      <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
+  beta_gks    <- lapply(EST_s2, "[[", "beta") # If slow is used, we would have beta parameters for all group-cluster combinations
+  psi_gks_tmp <- lapply(EST_s2, "[[", "psi")
+
+  # Select useful betas
+  k.idx <- (seq_len(nclus) - 1) * ngroups + 1L
+  beta_ks <- beta_gks[k.idx]
+
+  # Re-order betas
+  if (nclus == 1) {
+    beta_ks <- beta_ks[[1]]
+    beta_ks <- reorder(beta_ks)
+  } else if (nclus != 1) {
+    beta_ks <- lapply(1:nclus, function(x) {
+      reorder(x = beta_ks[[x]], exog = exog, endog = endog)
+    }) # Does not work with only one cluster
+  }
+
+  # Re-order psi
+  # Put them in a matrix of matrices (right now is a list)
+  psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+  for(gk in 1:(ngroups*nclus)){
+    psi_gks_tmp[[gk]] <- reorder(x = psi_gks_tmp[[gk]], exog = exog, endog = endog)
+    psi_gks[[gk]]     <- psi_gks_tmp[[gk]]
+  }
+
   # Return the most important results
   return(list(
     results_nstarts = results_nstarts,
     z_gks_nstarts   = z_gks_nstarts,
     loglik_nstarts  = loglik_nstarts,
     iter_nstarts    = iter_nstarts,
+    iter            = iter,
+    z_gks           = z_gks,
+    LL              = LL,
+    s2out           = s2out,
     endog           = endog,
     exog            = exog,
     endog1          = endog1,
-    endog2          = endog2)
+    endog2          = endog2,
+    beta_ks         = beta_ks,
+    psi_gks         = psi_gks)
   )
 }
 
