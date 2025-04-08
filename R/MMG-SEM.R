@@ -68,7 +68,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
                    partition = "hard", endogenous_cov = TRUE,
                    endo_group_specific = TRUE,
                    sam_method = "local", meanstr = FALSE,
-                   rescaling = F,
+                   rescaling = F, only_slow = FALSE,
                    ...) {
 
   # Get arguments in ...
@@ -222,7 +222,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
               partition           = partition,
               userStart           = userStart,
               printing            = printing,
-              s1ori               = s1ori)
+              s1ori               = s1ori,
+              only_slow           = only_slow)
 
   iter            <- SM$iter    # Best start number of iterations
   z_gks           <- SM$z_gks   # Best start posteriors
@@ -592,7 +593,8 @@ Step2 <- function(ngroups             = ngroups,
                   partition           = partition,
                   userStart           = userStart,
                   printing            = printing,
-                  s1ori               = s1ori){
+                  s1ori               = s1ori,
+                  only_slow           = only_slow){
 
 
   # Do a fake sem() to obtain the correct settings to use in Step 2
@@ -624,7 +626,7 @@ Step2 <- function(ngroups             = ngroups,
   exog <- lat_var[!c(lat_var %in% endog)]
 
   if(length(endog2) > 1 & endogenous_cov == T){ # If there is a covariance between endogenous 2 variables, do the slow estimation
-    only_slow <- F
+    # only_slow <- only_slow
     # EXPERIMENT WITH SLOW ESTIMATION
     # Try first fast estimation (no covariance) and one extra iteration with slow estimation
     if(isFALSE(only_slow)){
@@ -640,7 +642,7 @@ Step2 <- function(ngroups             = ngroups,
                          lat_var             = lat_var,
                          ordered             = ordered,
                          endo_group_specific = endo_group_specific,
-                         endogenous_cov      = endogenous_cov,
+                         endogenous_cov      = FALSE, # Run it as false even if it is TRUE. We just want some initial quick estimates
                          lambda_gs           = lambda_gs,
                          theta_gs            = theta_gs,
                          S_unbiased          = S_unbiased,
@@ -689,9 +691,10 @@ Step2 <- function(ngroups             = ngroups,
                          userStart           = userStart,
                          printing            = printing,
                          s1ori               = s1ori,
-                         only_slow           = F,
+                         only_slow           = FALSE,
                          beta_ks             = beta_ks,
-                         psi_gks             = psi_gks)
+                         psi_gks             = psi_gks,
+                         z_gks               = z_gks)
 
       z_gks           <- SM_2$z_gks   # Best start posteriors
       LL              <- SM_2$LL      # Best start loglikelihood
@@ -722,7 +725,8 @@ Step2 <- function(ngroups             = ngroups,
                        partition           = partition,
                        userStart           = userStart,
                        printing            = printing,
-                       s1ori               = s1ori)
+                       s1ori               = s1ori,
+                       only_slow           = TRUE)
 
       results_nstarts <- SM$results_nstarts
       z_gks_nstarts   <- SM$z_gks_nstarts
@@ -1464,9 +1468,10 @@ Step2_slow <- function(ngroups             = ngroups,
                        userStart           = userStart,
                        printing            = printing,
                        s1ori               = s1ori,
-                       only_slow           = only_slow,
+                       only_slow,
                        beta_ks,
-                       psi_gks){
+                       psi_gks,
+                       z_gks){
 
 
   # Necessary objects
@@ -1611,7 +1616,7 @@ Step2_slow <- function(ngroups             = ngroups,
 
     beta_vec <- setNames(object = beta_vec, nm = beta_nam) # Name the vector (the .1 and .2 represent the cluster)
     beta.idx <- match(fake_model$parK, names(beta_vec)) # Indices of beta_vec in fake_global
-    fake_global$ustart <- ifelse(test = !is.na(beta.idx), yes = beta_vec[beta.idx], no = fake_global$ustart)
+    fake_model$ustart <- ifelse(test = !is.na(beta.idx), yes = beta_vec[beta.idx], no = fake_model$ustart)
 
     # Factor covariances (Group-cluster specific!)
     cov_vec <- c() # Empty vector for the covariances
@@ -1634,8 +1639,109 @@ Step2_slow <- function(ngroups             = ngroups,
     }
 
     cov_vec <- setNames(object = cov_vec, nm = cov_nam) # Name the vector (the number after the . is the group)
-    cov.idx <- match(fake_global$par, names(cov_vec)) # Indices of cov_vec in fake_global
-    fake_global$ustart <- ifelse(test = !is.na(cov.idx), yes = cov_vec[cov.idx], no = fake_global$ustart)
+    cov.idx <- match(fake_model$par, names(cov_vec)) # Indices of cov_vec in fake_global
+    fake_model$ustart <- ifelse(test = !is.na(cov.idx), yes = cov_vec[cov.idx], no = fake_model$ustart)
+
+    # Do the final extra iteration
+    pi_ks <- colMeans(z_gks) # Prior probabilities
+    N_gks <- z_gks * N_gs # Sample size per group-cluster combination
+    N_gks <- c(N_gks)
+
+    # PARAMETER ESTIMATION
+    # Call lavaan to estimate the structural parameters
+    # the 'groups' are the clusters
+    # Note: this makes all resulting parameters to be cluster-specific (it is reconstructed later)
+    s2out <- sem(
+      model = fake_model,    # 'fake' partable with duplicated parameters and so on
+      sample.cov = fake_cov, # 'fake' duplicated factors' cov matrix (repeated by the number of clusters)
+      sample.nobs = N_gks,   # Sample size per group-cluster combination weighted by the posteriors
+      baseline = FALSE, se = "none",
+      h1 = FALSE, check.post = FALSE,
+      control = list(rel.tol = 1e-09),
+      sample.cov.rescale = FALSE,
+      fixed.x = FALSE
+    ) # , control = list(max.iter = 50))
+
+    # Prepare Sigma
+    # Initialize the object for estimating Sigma
+    Sigma <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+    I <- diag(length(lat_var)) # Identity matrix based on number of latent variables. Used later
+
+    # compute loglikelihood for all group/cluster combinations
+    # Initialize matrices to store loglikelihoods
+    loglik_gks  <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+    loglik_gksw <- matrix(data = 0, nrow = ngroups, ncol = nclus)
+    gk <- 0
+
+    for (k in 1:nclus) {
+      for (g in 1:ngroups) {
+        gk <- gk + 1L
+        loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          sample.mean = s2out@SampleStats@mean[[gk]],
+          sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
+          sample.cov  = s2out@SampleStats@cov[[gk]],
+          Mu          = s2out@SampleStats@mean[[gk]], # s2out@SampleStats@mean[[gk]],
+          Sigma       = s2out@implied$cov[[gk]]
+        )
+        loglik_gks[g, k] <- loglik_gk
+        loglik_gksw[g, k] <- log(pi_ks[k]) + loglik_gk # weighted loglik
+      }
+    }
+
+    # Get total loglikelihood
+    # First, deal with arithmetic underflow by subtracting the maximum value per group
+    max_gs <- apply(loglik_gksw, 1, max)                                       # Get max value per row
+    minus_max <- sweep(x = loglik_gksw, MARGIN = 1, STATS = max_gs, FUN = "-") # Subtract the max per row
+    exp_loglik <- exp(minus_max)                                               # Exp before summing for total loglikelihood
+    loglik_gsw <- log(apply(exp_loglik, 1, sum))                               # Sum exp_loglik per row and then take the log again
+    LL <- sum((loglik_gsw + max_gs))                                           # Add the maximum again and then sum them all for total loglikelihood
+
+    # Now, do E-step
+    E_out <- EStep(
+      pi_ks = pi_ks, ngroup = ngroups,
+      nclus = nclus, loglik = loglik_gks
+    )
+    z_gks <- E_out
+
+    # Organize output to return (organize beta matrices, etc.)
+    # Get best fit and z_gks based on the loglikelihood
+    colnames(z_gks) <- paste("Cluster", seq_len(nclus))
+
+    # Extract matrices from final step 2 output
+    EST_s2      <- lavaan::lavInspect(s2out, "est", add.class = TRUE, add.labels = TRUE) # Estimated matrices step 2
+    beta_gks    <- lapply(EST_s2, "[[", "beta") # If slow is used, we would have beta parameters for all group-cluster combinations
+    psi_gks_tmp <- lapply(EST_s2, "[[", "psi")
+
+    # Select useful betas
+    k.idx <- (seq_len(nclus) - 1) * ngroups + 1L
+    beta_ks <- beta_gks[k.idx]
+
+    # Re-order betas
+    if (nclus == 1) {
+      beta_ks <- beta_ks[[1]]
+      beta_ks <- reorder(beta_ks)
+    } else if (nclus != 1) {
+      beta_ks <- lapply(1:nclus, function(x) {
+        reorder(x = beta_ks[[x]], exog = exog, endog = endog)
+      }) # Does not work with only one cluster
+    }
+
+    # Re-order psi
+    # Put them in a matrix of matrices (right now is a list)
+    psi_gks <- matrix(data = list(NA), nrow = ngroups, ncol = nclus)
+    for(gk in 1:(ngroups*nclus)){
+      psi_gks_tmp[[gk]] <- reorder(x = psi_gks_tmp[[gk]], exog = exog, endog = endog)
+      psi_gks[[gk]]     <- psi_gks_tmp[[gk]]
+    }
+
+    # Return the most important results
+    return(list(
+      z_gks           = z_gks,
+      LL              = LL,
+      s2out           = s2out,
+      beta_ks         = beta_ks,
+      psi_gks         = psi_gks)
+    )
   }
 
   # ESTIMATION STEP 2 (EM algorithm) ----------------------------------------------------
