@@ -32,6 +32,12 @@ se <- function(object){
   if (is.list(MM)){ # Extract the parameter table per block and bind it together for a complete table
     for(m in 1:length(MM)){
       tmp_partbl <- lavaan::parTable(MM[[m]])
+      # Select only the necessary columns
+      tmp_partbl <- tmp_partbl[, c("id", "lhs", "op", "rhs",
+                                   "user", "block", "group",
+                                   "free", "ustart", "exo",
+                                   "label", "plabel", "start",
+                                   "est", "se")]
       partbl     <- rbind(partbl, tmp_partbl)
     }
   } else {
@@ -56,7 +62,7 @@ se <- function(object){
 
   lambda_vec <- setNames(object = lambda_vec, nm = lambda_nam)
   cons_vec <- lambda_vec[lambda_nam %in% paste0(constrained, ".g1")] # only get the first group (given they are constrained)
-  if(length(unconstrained) == 0){unco_vec <- NULL} else {unco_vec <- lambda_vec[grepl(unconstrained, x = names(lambda_vec))]} # Get unconstrained vector only when there are actually unconstrained parameters
+  if(length(unconstrained) == 0){unco_vec <- NULL} else {unco_vec <- lambda_vec[grepl(paste(unconstrained, collapse = "|"), x = names(lambda_vec))]} # Get unconstrained vector only when there are actually unconstrained parameters
   lambda_vec <- c(cons_vec, unco_vec)
 
   # Theta
@@ -100,13 +106,15 @@ se <- function(object){
   # However, even if repeated, it is only one parameter. The unique.idx removes the repeated parameter.
   for(k in 1:nclus){
     for(g in 1:ngroups){
-      object$param$psi_gks[[g, k]] <- round(object$param$psi_gks[[g, k]], 7) # Avoid floting point difference
-      non_zer.idx <- which(unlist(object$param$psi_gks[[g, k]]) != 0)
-      unique.idx  <- !duplicated(unlist(object$param$psi_gks[[g, k]])[non_zer.idx])
-      cov_vec <- c(cov_vec, unlist(object$param$psi_gks[[g, k]])[non_zer.idx][unique.idx])
+      # object$param$psi_gks[[g, k]] <- round(object$param$psi_gks[[g, k]], 7) # Avoid floting point difference
+      tmp.lower.tri <- object$param$psi_gks[[g, k]]
+      tmp.lower.tri[upper.tri(tmp.lower.tri)] <- 0
+      non_zer.idx <- which(unlist(tmp.lower.tri) != 0)
+      # unique.idx  <- !duplicated(unlist(object$param$psi_gks[[g, k]])[non_zer.idx])
+      cov_vec <- c(cov_vec, unlist(tmp.lower.tri)[non_zer.idx])# [unique.idx])
       cov_nam <- c(cov_nam, as.vector(outer(X = rownames(object$param$psi_gks[[g, k]]),
                                             Y = rownames(object$param$psi_gks[[g, k]]),
-                                            function(x, y) paste0(x, "~~", y, ".g", g, ".k", k)))[non_zer.idx][unique.idx])
+                                            function(x, y) paste0(x, "~~", y, ".g", g, ".k", k)))[non_zer.idx])# [unique.idx])
     }
   }
 
@@ -174,7 +182,7 @@ se <- function(object){
                           idx.unco   = idx.unco,
                           idx.theta  = idx.theta,
                           vec_ind    = vec_ind)
-return(HESS)
+
   # (4) Organize the SE for each parameter
   vector_SE <- setNames(diag(sqrt(MASS::ginv(-HESS, tol = 1e-06))), colnames(HESS)) # The SE comes from the inverse of the negative hessian
 
@@ -261,34 +269,39 @@ return(HESS)
                      vec_ind    = vec_ind)
 
   # SE Correction ---
-  Sigma_1 <- lavaan::vcov(object$MM) # Extract Sigma step 1 directly from lavaan
-  Sigma_1 <- Sigma_1[, !duplicated(colnames(Sigma_1))] # Lavaan returns the constrained parameters duplicated. Remove them
-  colnames(Sigma_1)[grepl(pattern = ".p", x = colnames(Sigma_1))] <- names(cons_vec) # Rename the constrained parameter names to the actual parameter
-  colnames(Sigma_1)[grep(pattern = ".g", x = colnames(Sigma_1), invert = T)] <- paste0(colnames(Sigma_1)[grep(pattern = ".g", x = colnames(Sigma_1), invert = T)], ".g1") # Add g1 to the first group
-
-  rownames(Sigma_1)[grepl(pattern = ".p", x = rownames(Sigma_1))] <- names(cons_vec) # Rename the constrained parameter names to the actual parameter
-  rownames(Sigma_1)[grep(pattern = ".g", x = rownames(Sigma_1), invert = T)] <- paste0(rownames(Sigma_1)[grep(pattern = ".g", x = rownames(Sigma_1), invert = T)], ".g1") # Add g1 to the first group
-
-  Sigma_1 <- Sigma_1[c(names(cons_vec), names(unco_vec), names(theta_vec)),
-                     c(names(cons_vec), names(unco_vec), names(theta_vec))] # Re-order in the same way as the one used in the joint hessian
-
-  # Get indices
+  # Get indices for parameters of both steps
   step1.idx <- which(colnames(HESS) %in% c(names(lambda_vec), names(theta_vec)))
   step2.idx <- which(colnames(HESS) %in% c(names(beta_vec), names(cov_vec)))
 
   # Get matrix divided
-  I_22 <- -HESS[step2.idx, step2.idx]
-  I_21 <- -HESS[step2.idx, step1.idx]
+  I_22 <- HESS[step2.idx, step2.idx]
+  I_21 <- HESS[step2.idx, step1.idx]
+  I_11 <- HESS[step1.idx, step1.idx]
 
-  I_22.inv <- MASS::ginv(I_22, tol = 1e-06)
-  Sigma_1  <- Sigma_1[step1.idx, step1.idx]
+  # Not sure about these equivalences yet
+  Sigma_2 <- I_22.inv <- MASS::ginv(-I_22, tol = 1e-06) # Equivalent(?) to Sigma_22
 
+  if(is.list(MM)){
+    Sigma_1 <- I_11.inv <- MASS::ginv(-I_11, tol = 1e-06) # Equivalent(?) to Sigma_11
+  } else { # If we do not have measurement blocks, lavaan already gives me the parameter sampling variance
+    Sigma_1 <- lavaan::vcov(object$MM) # Extract Sigma step 1 directly from lavaan
+    Sigma_1 <- Sigma_1[, !duplicated(colnames(Sigma_1))] # Lavaan returns the constrained parameters duplicated. Remove them
+    colnames(Sigma_1)[grepl(pattern = ".p", x = colnames(Sigma_1))] <- names(cons_vec) # Rename the constrained parameter names to the actual parameter
+    colnames(Sigma_1)[grep(pattern = ".g", x = colnames(Sigma_1), invert = T)] <- paste0(colnames(Sigma_1)[grep(pattern = ".g", x = colnames(Sigma_1), invert = T)], ".g1") # Add g1 to the first group
+
+    rownames(Sigma_1)[grepl(pattern = ".p", x = rownames(Sigma_1))] <- names(cons_vec) # Rename the constrained parameter names to the actual parameter
+    rownames(Sigma_1)[grep(pattern = ".g", x = rownames(Sigma_1), invert = T)] <- paste0(rownames(Sigma_1)[grep(pattern = ".g", x = rownames(Sigma_1), invert = T)], ".g1") # Add g1 to the first group
+
+    Sigma_1 <- Sigma_1[c(names(cons_vec), names(unco_vec), names(theta_vec)),
+                       c(names(cons_vec), names(unco_vec), names(theta_vec))] # Re-order in the same way as the one used in the joint hessian
+
+    Sigma_1  <- Sigma_1[step1.idx, step1.idx]
+  }
 
   # APPLY THE CORRECTION (note: for now, it is not changing too much the results)
-  Sigma_2_corrected <- diag(sqrt(I_22.inv + I_22.inv %*% I_21 %*% Sigma_1 %*% t(I_21) %*% I_22.inv))
+  Sigma_2_corrected <- diag(sqrt(Sigma_2 + I_22.inv %*% I_21 %*% Sigma_1 %*% t(I_21) %*% I_22.inv))
   Sigma_2_corrected <- setNames(object = Sigma_2_corrected, nm = colnames(HESS[step2.idx, step2.idx]))
   betas_se_corrected <- Sigma_2_corrected[grepl("^[^~]*~[^~]*$", names(Sigma_2_corrected))]
-
 
   # Organize results in vector form -----------------------------------
   SE_vector <- list(
@@ -418,7 +431,7 @@ obj.S2 <- function(x, lambda_mat, theta_mat,
 
 # Hessian function to compute the second derivative ------------------------------------------------
 
-compute_hessian <- function(f, x, d = 1e-5,
+compute_hessian <- function(f, x, d = 1e-06,
                             lambda_mat, theta_mat,
                             beta_mat, psi_mat,
                             pi_ks, S,
@@ -426,7 +439,7 @@ compute_hessian <- function(f, x, d = 1e-5,
                             idx.cons, idx.unco, idx.theta,
                             idx.beta, idx.psi, idx.psi_vec,
                             n_cov_exo, vec_ind) {
-browser()
+
   n  <- length(x)
   H  <- matrix(0, n, n)
   colnames(H) <- rownames(H) <- names(x)

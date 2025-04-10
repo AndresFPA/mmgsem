@@ -1595,7 +1595,8 @@ Step2_slow <- function(ngroups             = ngroups,
   # Run only one extra iteration (slow estimation) after running everything without covariances (fast estimation)
   if(isFALSE(only_slow)){
     # Get structural model parameter table
-    fake_model$parK <- paste0(fake_model$lhs, fake_model$op, fake_model$rhs, ".k", fake_model$cluster)
+    fake_model$parK <- paste0(fake_model$lhs, fake_model$op, fake_model$rhs, ".k",fake_model$cluster)
+    fake_model$par  <- paste0(fake_model$lhs, fake_model$op, fake_model$rhs, ".g", fake_model$group)
 
     # Add the estimates of the structural parameters as start of the fake_model table
     # Extract the regression parameters in a vector
@@ -1629,18 +1630,20 @@ Step2_slow <- function(ngroups             = ngroups,
     for(k in 1:nclus){
       for(g in 1:ngroups){
         gk <- gk + 1
-        non_zer.idx <- which(unlist(psi_gks[[g, k]]) != 0)
-        unique.idx  <- !duplicated(unlist(psi_gks[[g, k]])[non_zer.idx])
-        cov_vec <- c(cov_vec, unlist(psi_gks[[g, k]])[non_zer.idx][unique.idx])
+        tmp.lower.tri <- psi_gks[[g, k]]
+        tmp.lower.tri[upper.tri(tmp.lower.tri)] <- 0
+        non_zer.idx <- which(unlist(tmp.lower.tri) != 0)
+        cov_vec <- c(cov_vec, unlist(tmp.lower.tri)[non_zer.idx])
         cov_nam <- c(cov_nam, as.vector(outer(X = rownames(psi_gks[[g, k]]),
                                               Y = colnames(psi_gks[[g, k]]),
-                                              function(x, y) paste0(y, "~~", x, ".g", gk)))[non_zer.idx][unique.idx])
+                                              function(x, y) paste0(y, "~~", x, ".g", gk)))[non_zer.idx])
       }
     }
 
     cov_vec <- setNames(object = cov_vec, nm = cov_nam) # Name the vector (the number after the . is the group)
     cov.idx <- match(fake_model$par, names(cov_vec)) # Indices of cov_vec in fake_global
     fake_model$ustart <- ifelse(test = !is.na(cov.idx), yes = cov_vec[cov.idx], no = fake_model$ustart)
+    fake_model$ustart[is.na(fake_model$ustart)] <- 0.01 # Provide a trivial start number for the endo cov (if not added could cause problems with empty clusters)
 
     # Do the final extra iteration
     pi_ks <- colMeans(z_gks) # Prior probabilities
