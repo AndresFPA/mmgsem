@@ -22,6 +22,7 @@ MMGSEM(
   sam_method = "local",
   meanstr = FALSE,
   rescaling = F,
+  only_slow = FALSE,
   ...
 )
 }
