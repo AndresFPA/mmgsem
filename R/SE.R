@@ -22,7 +22,6 @@ se <- function(object){
   # To calculate the SE, we use the Hessian (second derivative) of the structural parameters.
   # For the derivative, we use a custom function which requires a parameter vector and an obj. function
   # (1) Get all necesseary objects for the objective function
-  # Get the parameter vector
   ## Get the parameter vector ##
   # Get the measurement model parameters in a vector
   # Lambda
