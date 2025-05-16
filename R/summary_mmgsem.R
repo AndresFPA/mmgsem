@@ -8,7 +8,7 @@
 #' @export
 summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
   if (!is.list(model)) {
-    stop("Input must be a list, likely the output of MMGSEM().")
+    stop("Input must be a list, likely the output of MMGSEM() or ModelSelection().")
   }
 
   if (!is.null(se) & isTRUE(model_selection)){
