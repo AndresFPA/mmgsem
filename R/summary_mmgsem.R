@@ -52,14 +52,14 @@ summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
     cat("Number of clusters: ", (ncol(posteriors)-1), "\n")
     cat("Number of random starts: ", nstarts, "\n")
     cat("Best start converged normally after", iterations, "iterations\n")
-
-    cat("\nIf 'local' sam is used, MMG-SEM converges using the loglikelihood from the\nsecond step (only structural model parameters), here called 'Step 2' Log-Likelihood.\n 'Observed'loglikelihood is reconstructed using the measurement model parameters.\n")
     cat("\nFinal Log-Likelihood (Step 2): ", loglik, "\n")
     cat("Final Log-Likelihood (Observed): ", obs_loglik, "\n")
-    cat("BIC (Step 2): ", BIC$Factors$BIC_N, " (N-based), ", BIC$Factors$BIC_G, " (G-based)\n")
-    cat("BIC (Observed): ", BIC$observed$BIC_N, " (N-based), ", BIC$observed$BIC_G, " (G-based)\n")
-    cat("AIC (Step 2): ", AIC$Factors, "\n")
-    cat("AIC (Observed): ", AIC$observed, "\n")
+
+    # cat("\nIf 'local' sam is used, MMG-SEM converges using the loglikelihood from the\nsecond step (only structural model parameters), here called 'Step 2' Log-Likelihood.\n 'Observed'loglikelihood is reconstructed using the measurement model parameters.\n")
+    # cat("BIC (Step 2): ", BIC$Factors$BIC_N, " (N-based), ", BIC$Factors$BIC_G, " (G-based)\n")
+    # cat("BIC (Observed): ", BIC$observed$BIC_N, " (N-based), ", BIC$observed$BIC_G, " (G-based)\n")
+    # cat("AIC (Step 2): ", AIC$Factors, "\n")
+    # cat("AIC (Observed): ", AIC$observed, "\n")
     # cat("Entropy R²: ", entropy, "\n")
 
     # Display regression coefficients per cluster
@@ -157,7 +157,7 @@ summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
     print(Overview[, 1:idx])
 
     cat("\n")
-    cat("To check the scree plots of each model selection measure, please use the plot_mmgsem() function\n")
+    cat("To check the plots of each model selection measure, please use the plot_mmgsem() function\n")
   }
 
 }

@@ -11,7 +11,7 @@
 #' @return HESS: Hessian matrix containing all the second derivatives of the parameters (equivalent to the SE, but in other presentation).
 #'
 #' @export
-se <- function(object){
+se <- function(object, d = 1e-07){
   # Prepare some objects
   # Remove unnecessary last column of the posteriors object
   object$posteriors <- object$posteriors[, 1:(ncol(object$posteriors) - 1)]
@@ -165,7 +165,7 @@ se <- function(object){
 
   HESS <- compute_hessian(f         = obj.S2,
                           x         = x,
-                          d         = 1e-06,
+                          d         = d,
                           lambda_mat = object$param$lambda,
                           theta_mat  = object$param$theta,
                           beta_mat   = object$param$beta_ks,
@@ -298,9 +298,14 @@ se <- function(object){
   }
 
   # APPLY THE CORRECTION (note: for now, it is not changing too much the results)
-  Sigma_2_corrected <- diag(sqrt(Sigma_2 + I_22.inv %*% I_21 %*% Sigma_1 %*% t(I_21) %*% I_22.inv))
-  Sigma_2_corrected <- setNames(object = Sigma_2_corrected, nm = colnames(HESS[step2.idx, step2.idx]))
-  betas_se_corrected <- Sigma_2_corrected[grepl("^[^~]*~[^~]*$", names(Sigma_2_corrected))]
+  Sigma_2_corrected           <- Sigma_2 + I_22.inv %*% I_21 %*% Sigma_1 %*% t(I_21) %*% I_22.inv
+  colnames(Sigma_2_corrected) <- rownames(Sigma_2_corrected) <- colnames(HESS[step2.idx, step2.idx])
+  vcov_betas                  <- Sigma_2_corrected[grepl("^[^~]*~[^~]*$", colnames(Sigma_2_corrected)), grepl("^[^~]*~[^~]*$", colnames(Sigma_2_corrected))]
+
+  # vector form
+  vector_corrected <- diag(sqrt(Sigma_2_corrected))
+  vector_corrected <- setNames(object = vector_corrected, nm = colnames(HESS[step2.idx, step2.idx]))
+  betas_se_corrected <- vector_corrected[grepl("^[^~]*~[^~]*$", names(vector_corrected))]
 
   # Organize results in vector form -----------------------------------
   SE_vector <- list(
@@ -321,9 +326,10 @@ se <- function(object){
   )
 
   return(list(
-    SE_vector = SE_vector,
-    SE_matrix = SE_matrix,
-    HESS = HESS,
+    SE_vector  = SE_vector,
+    SE_matrix  = SE_matrix,
+    HESS       = HESS,
+    vcov_betas = vcov_betas,
     estimates_vector = estimates_vector)
     )
 }
