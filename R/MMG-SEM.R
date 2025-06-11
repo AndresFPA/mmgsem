@@ -390,6 +390,38 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   # Add the group name to the posterior matrix
   z_gks       <- as.data.frame(z_gks)
   z_gks$Group <- g_name
+  g_col_idx   <- ncol(z_gks)
+  z_gks       <- z_gks[,c(g_col_idx, 1:(g_col_idx-1))] # Reorder with Group column as the first column
+
+  # Last step, compute the R2 of each endogenous variable per group
+  # Compute the modal clustering to extract the correct psi_gks
+  post_no_group <- z_gks[, 2:ncol(z_gks)]
+  Modal_posteriors <- t(apply(post_no_group, 1, function(x) as.numeric(x == max(x))))
+  Modal_posteriors <- as.data.frame(Modal_posteriors)
+
+  # Extract relevant psi_gks
+  psi_idx <- which(x = Modal_posteriors == 1, arr.ind = T) # array indices of the relevant group-cluster combinations
+
+  # Reorder based on group number insted of column number
+  correct_idx <- order(psi_idx[,1])
+  psi_idx <- psi_idx[correct_idx,]
+
+  # Get total and residual variance objects (in array form)
+  res_var <- array(data = NA, dim = c(Q, Q, ngroups))
+  tot_var <- array(unlist(cov_eta), dim = c(Q, Q, ngroups))
+  for(g in 1:ngroups){
+    res_var[, , g] <- psi_gks[[psi_idx[g, 1], psi_idx[g, 2]]]
+  }
+
+  colnames(res_var) <- rownames(res_var) <- lat_var
+  colnames(tot_var) <- rownames(tot_var) <- lat_var
+
+  # Compute R2
+  R2 <- array(data = NA, dim = c(Q, Q, ngroups))
+  R2 <- 1 - (res_var/tot_var)
+  R2 <- apply(R2, 3, diag) # Get only the explained variances
+  R2 <- R2[endog, ]
+  colnames(R2) <- g_name
 
   return(list(
     posteriors    = z_gks,
@@ -414,7 +446,8 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
     nstarts       = nstarts,
     ngroups       = ngroups,
     sam_method    = sam_method,
-    iterations    = iter
+    iterations    = iter,
+    R2            = R2
   ))
 }
 
@@ -609,7 +642,7 @@ Step2 <- function(ngroups             = ngroups,
     fixed.x = TRUE,
     information = "observed"
   )
-  FakeprTbl <- parTable(fake)
+  FakeprTbl <- lavaan::parTable(fake)
   fake@Options$do.fit <- TRUE
   fake@Options$se     <- "none"
   fake@ParTable$start <- NULL
@@ -888,7 +921,7 @@ Step2_fast <- function(ngroups             = ngroups,
     )
   }
 
-  FakeprTbl <- parTable(fake)
+  FakeprTbl <- lavaan::parTable(fake)
   fake@Options$do.fit <- TRUE
   fake@Options$se     <- "none"
   fake@ParTable$start <- NULL
@@ -1085,7 +1118,7 @@ Step2_fast <- function(ngroups             = ngroups,
         # Run structural estimation once per endo LV
         s2out <- vector(mode = "list", length = length(endog))
         for (lv in 1:length(endog)) {
-          s2out[[lv]] <- lavaan(
+          s2out[[lv]] <- lavaan::lavaan(
             slotOptions       = fake_lv[[lv]]@Options,
             slotParTable      = fake_lv[[lv]]@ParTable,
             sample.cov        = COV_lv[[lv]],
@@ -2330,7 +2363,7 @@ reorder_obs <- function(x, matrix, exog = exog, endog = endog,
 
   # Run fake measur_model
   fake_measur  <- lavaan::cfa(model = rewritten, data = dat, do.fit = F)
-  correct_vars <- lavNames(fake_measur)
+  correct_vars <- lavaan::lavNames(fake_measur)
 
   if (matrix == "lambda") {
     # Reorder lambda

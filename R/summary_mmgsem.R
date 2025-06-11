@@ -125,7 +125,7 @@ summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
     # Print the (modal) clustering results. Posterior matrix is avoided due to possible large results
     cat("\nClustering results:\n")
     # Transform soft clustering to hard clustering
-    post_no_group <- posteriors[, 1:(ncol(posteriors) - 1)]
+    post_no_group <- posteriors[, 2:ncol(posteriors)]
     Modal_posteriors <- t(apply(post_no_group, 1, function(x) as.numeric(x == max(x))))
     Modal_posteriors <- as.data.frame(Modal_posteriors)
     Modal_posteriors$Group <- posteriors$Group

@@ -110,13 +110,23 @@ test_MMGSEM <- function(model, se, multiple_comparison = FALSE) {
       Cluster_comparison = combinations,
       Difference = NA,
       z_value    = NA,
-      p_value    = NA
+      p_value    = NA,
+      sig        = NA
     )
+
+    # Compute the total number of comparisons
+    n_tests   <- length(combinations) * n_reg
+    new_alpha <- (0.05/n_tests)
 
     # Display results in a readable format
     cat("\nMixture Multi-Group Structural Equation Modelling (MMGSEM)\n")
     cat("Hypothesis Testing: Comparing regression parameters across clusters\n")
     cat("----------------------------------------------------------------------------\n")
+    cat("\n")
+
+    cat(n_tests, "multiple tests were computed.")
+    cat("\nIf the base alpha level is 0.05, we recommend using an alpha level of", new_alpha, "(Bonferroni correction).")
+    cat("\nAn * is added when the p-value is below the recommeded threshold.\n")
 
     # Display regression coefficients per cluster
     cat("\nTested Regression Coefficient (cluster comparison):\n")
@@ -156,7 +166,8 @@ test_MMGSEM <- function(model, se, multiple_comparison = FALSE) {
           # Add to the table (rounded for cleaner presentation)
           test_df[test_df$Cluster_comparison == current_comp, ]$Difference <- round(diff_beta, 3)
           test_df[test_df$Cluster_comparison == current_comp, ]$z_value    <- round(z_score, 3)
-          test_df[test_df$Cluster_comparison == current_comp, ]$p_value    <- round(p_value, 3)
+          test_df[test_df$Cluster_comparison == current_comp, ]$p_value    <- round(p_value, 4)
+          test_df[test_df$Cluster_comparison == current_comp, ]$sig        <- ifelse(p_value < new_alpha, "*", "")
         }
 
       }

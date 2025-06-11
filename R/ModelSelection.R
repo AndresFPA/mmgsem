@@ -4,7 +4,7 @@
 #' It calls the main function MMGSEM several times. One for each required model. Most of its arguments are the same as the MMGSEM main function.
 #'
 #' INPUT: Arguments required by the function
-#' @param clusters Vector of length two, indicating the minimal and maximal number of clusters. Used for the model selection.
+#' @param nclus Vector of length two, indicating the minimal and maximal number of clusters. Used for the model selection.
 #' @param dat Observed data of interest for the MMGSEM model.
 #' @param S1 Measurement model (MM). Used in step 1. Must be a string (like in lavaan).
 #'                   Can be a list of strings determining the number of measurement blocks (e.g., one string for the MM of
@@ -62,7 +62,7 @@
 #' PLEASE NOTE: This function requires 'lavaan' package to work.
 #' @export
 ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
-                           group, clusters, seed = NULL,
+                           group, nclus, seed = NULL,
                            userStart = NULL, s1_fit = NULL,
                            max_it = 10000L, nstarts = 20L, printing = FALSE,
                            partition = "hard", endogenous_cov = TRUE,
@@ -71,8 +71,8 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
                            rescaling = F, ...) {
 
   # Prepare objects to compare in model selection
-  nmodels   <- length(clusters[1]:clusters[2])
-  nclus     <- clusters[1]:clusters[2]
+  nmodels   <- length(nclus[1]:nclus[2])
+  nclus     <- nclus[1]:nclus[2]
   model_fit <- vector(mode = "list", length = nmodels)
   BIC_G     <- vector(mode = "list", length = nmodels)
   BIC_N     <- vector(mode = "list", length = nmodels)
@@ -92,7 +92,7 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
 
 
   # Call MMGSEM using the arguments provided by the user k times (one per required model)
-  for(k in clusters[1]:clusters[2]){
+  for(k in nclus[1]:nclus[2]){
     # If the user provides output of the first step (s1out), use it for all models
     if(!is.null(s1_fit)){
       model_fit[[k]] <- mmgsem::MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
@@ -101,7 +101,7 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
                                        endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
     } else if (is.null(s1_fit)){
       # browser()
-      if(k == clusters[1]){
+      if(k == nclus[1]){
         model_fit[[k]] <- mmgsem::MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
                                          userStart = userStart, s1_fit = NULL, max_it = max_it, nstarts = nstarts, printing = printing,
                                          partition = partition, endogenous_cov = endogenous_cov,
@@ -138,8 +138,8 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
   } # For loop ends here
   # browser()
   # Also do CHull
-  Chull_res      <- CHull(loglik = unlist(LL), nrpar = unlist(nrpar), nsclust = clusters)
-  Chull_res_fac  <- CHull(loglik = unlist(LL_fac), nrpar = unlist(nrpar_fac), nsclust = clusters)
+  Chull_res      <- CHull(loglik = unlist(LL), nrpar = unlist(nrpar), nsclust = nclus)
+  Chull_res_fac  <- CHull(loglik = unlist(LL_fac), nrpar = unlist(nrpar_fac), nsclust = nclus)
 
   # Chull function already returns a matrix with LL and nrpar. Use it as a base for the rest of the results
   # browser()
@@ -161,7 +161,7 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
                           "LL_fac", "nrpar_fac", "Chull_fac", "BIC_G_fac", "BIC_N_fac", "AIC_fac", "AIC3_fac", "ICL_fac")
 
   overview         <- as.data.frame(overview)
-  names(model_fit) <- paste0(clusters[1]:clusters[length(clusters)], "-cluster model")
+  names(model_fit) <- paste0(nclus[1]:nclus[length(nclus)], "-cluster model")
 
   return(list(Overview = overview,
               Models   = model_fit)
