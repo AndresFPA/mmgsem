@@ -62,7 +62,7 @@
 #' PLEASE NOTE: This function requires 'lavaan' package to work.
 #'
 #' @export
-MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
+mmgsem <- function(dat, S1 = NULL, S2 = NULL,
                    group, nclus, seed = NULL, userStart = NULL, s1_fit = NULL,
                    max_it = 10000L, nstarts = 20L, printing = FALSE,
                    partition = "hard", endogenous_cov = TRUE,
@@ -423,7 +423,7 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
   R2 <- R2[endog, ]
   colnames(R2) <- g_name
 
-  return(list(
+  output <- (list(
     posteriors    = z_gks,
     final_fit     = s2out, # Final fit of step 2 (contains all group-cluster combinations)
     MM            = S1output, # Output of step 1 (measurement model)
@@ -449,6 +449,10 @@ MMGSEM <- function(dat, S1 = NULL, S2 = NULL,
     iterations    = iter,
     R2            = R2
   ))
+
+  class(output) <- "mmgsem"
+
+  return(output)
 }
 
 

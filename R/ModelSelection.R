@@ -72,7 +72,7 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
 
   # Prepare objects to compare in model selection
   nmodels   <- length(nclus[1]:nclus[2])
-  nclus     <- nclus[1]:nclus[2]
+  clusters  <- nclus[1]:nclus[2]
   model_fit <- vector(mode = "list", length = nmodels)
   BIC_G     <- vector(mode = "list", length = nmodels)
   BIC_N     <- vector(mode = "list", length = nmodels)
@@ -163,9 +163,13 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
   overview         <- as.data.frame(overview)
   names(model_fit) <- paste0(nclus[1]:nclus[length(nclus)], "-cluster model")
 
-  return(list(Overview = overview,
+  output <- (list(Overview = overview,
               Models   = model_fit)
-         )
+             )
+
+  class(output) <- "mmgsem"
+
+  return(output)
 }
 
 
