@@ -6,7 +6,7 @@
 #' @param se Must be the resulting object from the se() function of the mmgsem package. If included, the summary function will return the hypothesis testing of the relevant parameters (regressions).
 
 #' @export
-summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
+summary.mmgsem <- function(model, se = NULL, model_selection = F) {
   if (!is.list(model)) {
     stop("Input must be a list, likely the output of MMGSEM() or ModelSelection().")
   }
@@ -118,7 +118,7 @@ summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
       }
 
       # Print results
-      cat("\nCluster", k, ":\n")
+      cat("\nCluster ", k, ":\n", sep = "")
       print(beta_df, row.names = FALSE)
     }
 
@@ -133,7 +133,7 @@ summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
     for(k in 1:(ncol(posteriors)-1)){
       # browser()
       members_k <- Modal_posteriors$Group[Modal_posteriors[, k] == 1]
-      cat("\nCluster", k, ":\n")
+      cat("\nCluster ", k, ":\n", sep = "")
       cat(members_k)
     }
 
@@ -146,13 +146,16 @@ summary_MMGSEM <- function(model, se = NULL, model_selection = F) {
     cat("MMG-SEM models from", lower_limit, "to", upper_limit, "clusters were run.\n")
     cat("-----------------------------------------\n")
     cat("Convex Hull selected the model with", which.max(Overview$Chull), "clusters\n")
-    cat("BIC_G selected the model with", which.min(Overview$BIC_G), "clusters\n")
-    cat("BIC_N selected the model with", which.min(Overview$BIC_N), "clusters\n")
-    cat("AIC selected the model with",   which.min(Overview$AIC), "clusters\n")
-    cat("AIC3 selected the model with",  which.min(Overview$AIC3), "clusters\n")
-    cat("ICL selected the model with",   which.min(Overview$ICL), "clusters\n")
+    cat("BIC_G selected the model with      ", which.min(Overview$BIC_G), "clusters\n")
+    cat("BIC_N selected the model with      ", which.min(Overview$BIC_N), "clusters\n")
+    cat("AIC selected the model with        ", which.min(Overview$AIC), "clusters\n")
+    cat("AIC3 selected the model with       ", which.min(Overview$AIC3), "clusters\n")
+    cat("ICL selected the model with        ", which.min(Overview$ICL), "clusters\n")
     cat("\n")
 
+    # Prepare the overview matrix for printing
+    Overview <- round(Overview, 3)
+    Overview[is.na(Overview)] <- "--"
     idx <- which(colnames(Overview) == "ICL")
     print(Overview[, 1:idx])
 

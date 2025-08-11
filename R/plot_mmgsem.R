@@ -8,7 +8,7 @@
 #' @return plots List that contains the plots for all the model selection measures.
 #'
 #' @export
-plot_MMGSEM <- function(ModelSel, criteria){
+plot.mmgsem <- function(ModelSel, criteria){
   if (!is.list(ModelSel)) {
     stop("Input must be a list, likely the output of ModelSelection().")
   }

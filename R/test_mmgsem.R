@@ -6,7 +6,7 @@
 #' @param se Must be the resulting object from the se() function of the mmgsem package. If included, the summary function will return the hypothesis testing of the relevant parameters (regressions).
 
 #' @export
-test_MMGSEM <- function(model, se, multiple_comparison = FALSE) {
+test.mmgsem <- function(model, se, multiple_comparison = FALSE) {
   if (!is.list(model)) {
     stop("Input must be a list, likely the output of MMGSEM() or ModelSelection().")
   }
@@ -165,7 +165,7 @@ test_MMGSEM <- function(model, se, multiple_comparison = FALSE) {
 
           # Add to the table (rounded for cleaner presentation)
           test_df[test_df$Cluster_comparison == current_comp, ]$Difference <- round(diff_beta, 3)
-          test_df[test_df$Cluster_comparison == current_comp, ]$z_value    <- round(z_score, 3)
+          test_df[test_df$Cluster_comparison == current_comp, ]$z_stat     <- round(z_score, 3)
           test_df[test_df$Cluster_comparison == current_comp, ]$p_value    <- round(p_value, 4)
           test_df[test_df$Cluster_comparison == current_comp, ]$sig        <- ifelse(p_value < new_alpha, "*", "")
         }
