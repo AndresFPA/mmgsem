@@ -74,19 +74,19 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
       }
 
       # Rename columns
-      colnames(beta_df) <- c("Response", "Predictor", "Estimate")
+      colnames(beta_df) <- c("Response", "Predictor", "estimate")
 
       # Remove rows with zero estimates
-      beta_df <- beta_df[beta_df$Estimate != 0, ]
+      beta_df <- beta_df[beta_df$estimate != 0, ]
 
       # Convert to formula-like representation
-      beta_df$Parameter <- paste0(beta_df$Response, " ~ ", beta_df$Predictor)
+      beta_df$parameter <- paste0(beta_df$Response, " ~ ", beta_df$Predictor)
 
       # Select relevant columns
-      beta_df <- beta_df[, c("Parameter", "Estimate")]
+      beta_df <- beta_df[, c("parameter", "estimate")]
 
       # Round beta results for cleaner presentation
-      beta_df$Estimate <- round(beta_df$Estimate, 3)
+      beta_df$estimate <- round(beta_df$estimate, 3)
 
       # Add standard errors if requested
       if(!is.null(se)){
@@ -113,7 +113,7 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
         # beta_df$p_value <- betas_pvalue_k
 
         beta_df$se      <- betas_se_corrected_k
-        beta_df$z_score <- betas_z_corrected_k
+        beta_df$z_stat  <- betas_z_corrected_k
         beta_df$p_value <- betas_pvalue_corrected_k
       }
 
