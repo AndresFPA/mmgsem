@@ -94,8 +94,8 @@ test.mmgsem <- function(model, se, multiple_comparison = FALSE) {
 
       # Create a matrix for the results
       result_df <- data.frame(
-        wald_stat = wald_stat,
-        p_value   = p_value
+        wald_stat = round(wald_stat, 3),
+        p_value   = round(p_value, 3)
       )
 
       # Print it
@@ -109,7 +109,7 @@ test.mmgsem <- function(model, se, multiple_comparison = FALSE) {
     test_df  <- data.frame(
       Cluster_comparison = combinations,
       Difference = NA,
-      z_value    = NA,
+      z_stat     = NA,
       p_value    = NA,
       sig        = NA
     )
@@ -158,14 +158,14 @@ test.mmgsem <- function(model, se, multiple_comparison = FALSE) {
           pooled_se <- sqrt((se_k_i^2) + (se_k_j^2))
 
           # Z-score
-          z_score <- diff_beta/pooled_se
+          z_stat <- diff_beta/pooled_se
 
           #P-value
-          p_value <- 2*(stats::pnorm(q = abs(z_score), lower.tail = F))
+          p_value <- 2*(stats::pnorm(q = abs(z_stat), lower.tail = F))
 
           # Add to the table (rounded for cleaner presentation)
           test_df[test_df$Cluster_comparison == current_comp, ]$Difference <- round(diff_beta, 3)
-          test_df[test_df$Cluster_comparison == current_comp, ]$z_stat     <- round(z_score, 3)
+          test_df[test_df$Cluster_comparison == current_comp, ]$z_stat     <- round(z_stat, 3)
           test_df[test_df$Cluster_comparison == current_comp, ]$p_value    <- round(p_value, 4)
           test_df[test_df$Cluster_comparison == current_comp, ]$sig        <- ifelse(p_value < new_alpha, "*", "")
         }
