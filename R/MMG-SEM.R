@@ -395,8 +395,12 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
 
   # Last step, compute the R2 of each endogenous variable per group
   # Compute the modal clustering to extract the correct psi_gks
-  post_no_group <- z_gks[, 2:ncol(z_gks)]
-  Modal_posteriors <- t(apply(post_no_group, 1, function(x) as.numeric(x == max(x))))
+  post_no_group <- as.matrix(z_gks[, 2:ncol(z_gks)])
+  if(nclus == 1){
+    Modal_posteriors <- post_no_group
+  } else {
+    Modal_posteriors <- t(apply(post_no_group, 1, function(x) as.numeric(x == max(x))))
+  }
   Modal_posteriors <- as.data.frame(Modal_posteriors)
 
   # Extract relevant psi_gks
@@ -424,7 +428,8 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
   colnames(R2) <- g_name
 
   output <- (list(
-    posteriors    = z_gks,
+    posteriors    = z_gks, # posterior probabilities
+    modal_post    = Modal_posteriors, # hard cluster memberships
     final_fit     = s2out, # Final fit of step 2 (contains all group-cluster combinations)
     MM            = S1output, # Output of step 1 (measurement model)
     param         = list(psi_gks = psi_gks, lambda = lambda_gs, # Lambda is invariant across all groups
