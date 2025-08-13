@@ -95,26 +95,26 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
   for(k in nclus[1]:nclus[2]){
     # If the user provides output of the first step (s1out), use it for all models
     if(!is.null(s1_fit)){
-      model_fit[[k]] <- mmgsem::MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
-                                       userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing,
-                                       partition = partition, endogenous_cov = endogenous_cov,
-                                       endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
+      model_fit[[k]] <- mmgsem(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
+                               userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing,
+                               partition = partition, endogenous_cov = endogenous_cov,
+                               endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
     } else if (is.null(s1_fit)){
       # browser()
       if(k == nclus[1]){
-        model_fit[[k]] <- mmgsem::MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
-                                         userStart = userStart, s1_fit = NULL, max_it = max_it, nstarts = nstarts, printing = printing,
-                                         partition = partition, endogenous_cov = endogenous_cov,
-                                         endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
+        model_fit[[k]] <- mmgsem(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
+                                 userStart = userStart, s1_fit = NULL, max_it = max_it, nstarts = nstarts, printing = printing,
+                                 partition = partition, endogenous_cov = endogenous_cov,
+                                 endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
 
         # Save the covariance matrix of step 1, so we do not run it for all models (it is the same for all of them).
         s1_fit <- model_fit[[k]]$MM
       } else {
         # browser()
-        model_fit[[k]] <- mmgsem::MMGSEM(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
-                                         userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing,
-                                         partition = partition, endogenous_cov = endogenous_cov,
-                                         endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
+        model_fit[[k]] <- mmgsem(dat = dat, S1 = S1, S2 = S2, group = group, nclus = k, seed = seed,
+                                 userStart = userStart, s1_fit = s1_fit, max_it = max_it, nstarts = nstarts, printing = printing,
+                                 partition = partition, endogenous_cov = endogenous_cov,
+                                 endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
       }
       print(paste("model", k, "finished"))
     }
