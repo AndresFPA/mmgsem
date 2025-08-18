@@ -9,7 +9,7 @@ ModelSelection(
   S1 = NULL,
   S2 = NULL,
   group,
-  clusters,
+  nclus,
   seed = NULL,
   userStart = NULL,
   s1_fit = NULL,
@@ -36,7 +36,7 @@ factor 1, and a second string for the MM of factor 2)}
 
 \item{group}{Name of the group variable. Must be a string.}
 
-\item{clusters}{Vector of length two, indicating the minimal and maximal number of clusters. Used for the model selection.}
+\item{nclus}{Vector of length two, indicating the minimal and maximal number of clusters. Used for the model selection.}
 
 \item{seed}{Pre-defined seed for the random start in case a replication is needed in the future.}
 
