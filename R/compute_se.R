@@ -107,7 +107,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
     Sigma_2 <- MASS::ginv(-HESS.S2)
 
     # vector form
-    vector_SE <- diag(sqrt(Sigma_2))
+    vector_SE <- sqrt(diag(Sigma_2))
     vector_SE <- setNames(object = vector_SE, nm = colnames(Sigma_2))
 
     # Organize results in vector form -----------------------------------
@@ -188,7 +188,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
   # Organize the SE for each parameter
   # Compute the inverse of the -Hessian to obtain the SE
   HESS_inv  <- MASS::ginv(-HESS, tol = 1e-06)
-  vector_SE <- diag(sqrt(HESS_inv))
+  vector_SE <- sqrt(diag(HESS_inv))
   vector_SE <- setNames(vector_SE, colnames(HESS)) # This is done to get the cross-derivatives
 
   ##############################

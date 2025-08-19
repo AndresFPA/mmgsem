@@ -27,6 +27,10 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
     posteriors  <- model$posteriors        # Posterior matrix
 
     if(!is.null(se)){
+      # Check whether the user requested corrected se
+      check <- se$SE_vector$betas_se_corrected
+      if(is.null(check)){se$SE_vector$betas_se_corrected <- NA}
+
       # Extract standard errors
       betas_se           <- se$SE_vector$betas_se
       betas_se_corrected <- se$SE_vector$betas_se_corrected
@@ -112,9 +116,16 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
         # beta_df$z_score <- betas_z_k
         # beta_df$p_value <- betas_pvalue_k
 
-        beta_df$se      <- betas_se_corrected_k
-        beta_df$z_stat  <- betas_z_corrected_k
-        beta_df$p_value <- betas_pvalue_corrected_k
+        # Return naive or corrected depending on what the user provided
+        if(is.null(check)){
+          beta_df$se      <- betas_se_k
+          beta_df$z_stat  <- betas_z_k
+          beta_df$p_value <- betas_pvalue_k
+        } else {
+          beta_df$se      <- betas_se_corrected_k
+          beta_df$z_stat  <- betas_z_corrected_k
+          beta_df$p_value <- betas_pvalue_corrected_k
+        }
       }
 
       # Print results
