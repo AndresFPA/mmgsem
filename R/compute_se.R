@@ -6,12 +6,14 @@
 #' @usage se(object)
 #'
 #' @param object A resulting fitted object from the MMGSEM function.
+#' @param d step size value used for the approximate numerical derivatie. By default, it is 1e-03
+#' @param naive Logical argument. If TRUE, the function will return the standard errors of step 2 without the correction for stepwise estimation.
 #'
 #' @return SE: List with the SE for all parameters. The SE are inside matrices mimicking the matrices of the parameters themselves. It also contains the corrected SE.
 #' @return HESS: Hessian matrix containing all the second derivatives of the parameters (equivalent to the SE, but in other presentation).
 #'
 #' @export
-compute_se <- function(object, d = 1e-03){
+compute_se <- function(object, d = 1e-03, naive = FALSE){
 
   # ngroups
   ngroups <- length(object$param$lambda)
@@ -99,6 +101,36 @@ compute_se <- function(object, d = 1e-03){
                              vec_ind = vec_ind_S2,
                              maps    = maps,
                              flats   = flats)
+
+  if(naive == TRUE){ # If the user only wants the naive standard error, stop here.
+    # Vcov matrix of the step 2 parameters
+    Sigma_2 <- MASS::ginv(-HESS.S2)
+
+    # vector form
+    vector_SE <- diag(sqrt(Sigma_2))
+    vector_SE <- setNames(object = vector_SE, nm = colnames(Sigma_2))
+
+    # Organize results in vector form -----------------------------------
+    SE_vector <- list(
+      betas_se   = vector_SE[vec_ind_S2[[1]]],
+      psi_se     = vector_SE[vec_ind_S2[[2]]]
+    )
+
+    estimates_vector <- list(
+      betas_est   = param_vec_S2[vec_ind_S2[[1]]],
+      psi_est     = param_vec_S2[vec_ind_S2[[2]]]
+    )
+
+    # Vcov matrix of the regression parameters
+    vcov_betas <- Sigma_2[grepl("^[^~]*~[^~]*$", colnames(Sigma_2)), grepl("^[^~]*~[^~]*$", colnames(Sigma_2))]
+
+    return(list(
+      SE_vector  = SE_vector,
+      HESS       = HESS.S2,
+      vcov_betas = vcov_betas,
+      estimates_vector = estimates_vector)
+    )
+  }
 
   ##########################
   # STEP 1 STANDARD ERRORS #
