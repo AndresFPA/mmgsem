@@ -6,7 +6,7 @@
 #' @usage se(object)
 #'
 #' @param object A resulting fitted object from the MMGSEM function.
-#' @param d step size value used for the approximate numerical derivatie. By default, it is 1e-03
+#' @param d step size value used for the approximate numerical derivative. By default, it is 1e-03
 #' @param naive Logical argument. If TRUE, the function will return the standard errors of step 2 without the correction for stepwise estimation.
 #'
 #' @return SE: List with the SE for all parameters. The SE are inside matrices mimicking the matrices of the parameters themselves. It also contains the corrected SE.
