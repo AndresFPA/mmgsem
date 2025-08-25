@@ -479,7 +479,7 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
     ...
   )
 
-  S_biased <- lavaan::lavInspect(s1_dummy, "samplestats")$cov
+  S_biased <- lapply(lavaan::lavInspect(s1_dummy, "samplestats"), "[[", "cov")
 
   # Step 1: Get group-specific factor covariances
   # Perform Step 1 according to the number of measurement blocks
