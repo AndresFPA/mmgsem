@@ -425,6 +425,7 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
   R2 <- 1 - (res_var/tot_var)
   R2 <- apply(R2, 3, diag) # Get only the explained variances
   R2 <- R2[endog, ]
+  if(length(endog) == 1){R2 <- t(R2)} # Ensure we have a matrix instead of a vector, even if we only have on endog factor
   colnames(R2) <- g_name
 
   output <- (list(
