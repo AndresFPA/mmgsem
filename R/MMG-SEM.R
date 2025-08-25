@@ -474,13 +474,12 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
   s1_dummy <- lavaan::cfa(
     model = model_dummy, data = centered, group = group,
     test = "none",
-    baseline = FALSE, h1 = FALSE,
-    implied = FALSE, loglik = FALSE,
+    baseline = FALSE, loglik = FALSE,
     do.fit = FALSE,
     ...
   )
 
-  S_biased <- s1_dummy@SampleStats@cov
+  S_biased <- lavaan::lavInspect(s1_dummy, "samplestats")$cov
 
   # Step 1: Get group-specific factor covariances
   # Perform Step 1 according to the number of measurement blocks
