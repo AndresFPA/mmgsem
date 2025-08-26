@@ -62,9 +62,10 @@
 #' PLEASE NOTE: This function requires 'lavaan' package to work.
 #'
 #' @export
-mmgsem <- function(dat, S1 = NULL, S2 = NULL,
+
+mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
                    group, nclus, seed = NULL, userStart = NULL, s1_fit = NULL,
-                   max_it = 10000L, nstarts = 20L, printing = FALSE,
+                   max_it = 10000L, nstarts = 20L, printing = TRUE,
                    partition = "hard", endogenous_cov = TRUE,
                    endo_group_specific = TRUE,
                    sam_method = "local", meanstr = FALSE,
@@ -79,7 +80,11 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
   ordered     <- dots_args$ordered; if(is.null(ordered)){ordered <- F}
   std.lv      <- dots_args$std.lv;  if(is.null(std.lv)){std.lv <- F}
   missing     <- dots_args$missing; if(is.null(missing)){missing <- "listwise"}
-
+  if(s1_type == "blavaan"){
+    wiggle      <- dots_args$wiggle # approximate metric invariance
+    wiggle.sd   <- dots_args$wiggle.sd # size of prior sd
+    bcontrol    <- dots_args$bcontrol # parallelizing the chains
+  }
   # Add a warning in case there is a pre-defined start and the user also requires a multi-start
   if (!(is.null(userStart)) && nstarts > 1) {
     warning("If a start is defined by the user, no multi-start is performed. The results correspond to the one start used an input")
@@ -88,9 +93,11 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
 
   # Get several values relevant for future steps
   g_name  <- as.character(unique(dat[, group]))
-  vars    <- lavaan::lavNames(lavaan::lavaanify(S1, auto = TRUE))
-  lat_var <- lavaan::lavNames(lavaan::lavaanify(S1, auto = TRUE), "lv")
-  n_var   <- length(vars)
+  if(s1_type != "mplus"){
+    vars    <- lavaan::lavNames(lavaan::lavaanify(S1, auto = TRUE))
+    lat_var <- lavaan::lavNames(lavaan::lavaanify(S1, auto = TRUE), "lv")
+  }
+  # n_var   <- length(vars)
 
   # Add an error in case of incompatibility in the arguments regarding the scale of the latent variables
   if(std.lv == T & rescaling == T){
@@ -142,25 +149,26 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
   }
 
   # Only center if data is not categorical and the mean structure is not required
-  if(ordered == F){
-    if(isFALSE(meanstr)){
-      group.idx <- match(dat[, group], g_name)
-      group.sizes <- tabulate(group.idx)
-      group.means <- rowsum.default(as.matrix(dat[, vars]),
-                                    group = group.idx, reorder = FALSE,
-                                    na.rm = TRUE # For listwise deletion
-      ) / group.sizes
-      centered[, vars] <- dat[, vars] - group.means[group.idx, , drop = FALSE]
+  if(s1_type != "mplus"){
+    if(ordered == F){
+      if(isFALSE(meanstr)){
+        group.idx <- match(dat[, group], g_name)
+        group.sizes <- tabulate(group.idx)
+        group.means <- rowsum.default(as.matrix(dat[, vars]),
+                                      group = group.idx, reorder = FALSE,
+                                      na.rm = TRUE # For listwise deletion
+        ) / group.sizes
+        centered[, vars] <- dat[, vars] - group.means[group.idx, , drop = FALSE]
+      }
     }
-  }
 
-  if(missing == "fiml"){centered <- dat} # If we want to deal with the missing data using fiml, we cannot center the data
-  # Centering the data requires the group means, which are dependent on possible NAs
+    if(missing == "fiml"){centered <- dat} # If we want to deal with the missing data using fiml, we cannot center the data
+    # Centering the data requires the group means, which are dependent on possible NAs
 
-  # Get sample covariance matrix per group (used later)
-  S_unbiased <- lapply(X = unique(centered[, group]), FUN = function(x) {
-    cov(centered[centered[, group] == x, vars])
-  })
+    # Get sample covariance matrix per group (used later)
+    S_unbiased <- lapply(X = unique(centered[, group]), FUN = function(x) {
+      cov(centered[centered[, group] == x, vars])
+    })}
 
   ## STEP 1 - MMG-SEM ----------------------------------------------------------------------------------------
   # Save the measurement model results
@@ -168,10 +176,17 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
   Step1_args <- list(S1         = S1,
                      s1_fit     = s1_fit,
                      centered   = centered,
-                     group      = group,
-                     S_unbiased = S_unbiased)
-  Step1_args <- c(dots_args, Step1_args)
-  MM <- do.call(what = Step1, args = Step1_args)
+                     group      = group)#,
+  # S_unbiased = S_unbiased)
+  if(s1_type == "lavaan"){
+    Step1_args <- c(dots_args, Step1_args)
+    MM <- do.call(what = Step1, args = Step1_args)
+  } else if(s1_type == "mplus"){
+    MM <- do.call(what = Step1_ML, args = Step1_args)
+  } else if(s1_type =="blavaan"){
+    Step1_args <- c(dots_args, Step1_args, seed = seed)
+    MM <- do.call(what = Step1_BSEM, args = Step1_args)
+  }
 
   # Extract necessary objects
   ngroups   <- MM$ngroups
@@ -183,6 +198,13 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
   S_biased  <- MM$S_biased
 
   gro_clu   <- ngroups * nclus
+
+  if(s1_type != "lavaan"){ #mplus or blavaan: single-indicator approach - factor scores as observed variables
+    vars    <- colnames(theta_gs[[1]])
+    lat_var <- colnames(cov_eta[[1]])
+    S_unbiased <- MM$S_unbiased
+    dat <- MM$single_data #factor scores as observed data
+  }
 
   # Only happens when ordinal = T
   # Rescale covariance matrices when ordinal
@@ -223,7 +245,8 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
               userStart           = userStart,
               printing            = printing,
               s1ori               = s1ori,
-              only_slow           = only_slow)
+              only_slow           = only_slow,
+              s1_type            = s1_type)
 
   iter            <- SM$iter    # Best start number of iterations
   z_gks           <- SM$z_gks   # Best start posteriors
@@ -301,29 +324,38 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
 
   # How many free loadings?
   # Identify the free loadings using the parameter table from lavaan
-  n_free <- 0
-  if (is.list(S1)) {
-    M <- length(S1)
-    for (m in 1:M) {
-      partbl    <- lavaan::parTable(S1output[[m]])
+  if(s1_type == "lavaan"){
+    n_free <- 0
+    if (is.list(S1)) {
+      M <- length(S1)
+      for (m in 1:M) {
+        partbl    <- lavaan::parTable(S1output[[m]])
+        free_load <- which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label != partbl$plabel)
+        n_free    <- n_free + length(free_load)
+      }
+    } else if (!is.list(S1)) {
+      partbl    <- lavaan::parTable(S1output)
       free_load <- which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label != partbl$plabel)
-      n_free    <- n_free + length(free_load)
+      n_free    <- length(free_load)
     }
-  } else if (!is.list(S1)) {
-    partbl    <- lavaan::parTable(S1output)
-    free_load <- which(partbl$op == "=~" & is.na(partbl$ustart) & partbl$group == 1 & partbl$label != partbl$plabel)
-    n_free    <- length(free_load)
-  }
 
-  # Get the correct number of free parameters depending on the possible combinations
-  # browser()
-  if (endo_group_specific == F) { # Is endogenous covariance group-specific?
-    nr_par_factors <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * nclus) + (n_cov_endo2 * nclus)
-    nr_pars <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * nclus) + (n_cov_endo2 * nclus) + (n_res * ngroups) + (n_load - Q - n_free) + (n_free * ngroups)
-  } else if (endo_group_specific == T) {
-    nr_par_factors <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * ngroups) + (n_cov_endo2 * ngroups)
-    nr_pars <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * ngroups) + (n_cov_endo2 * ngroups) + (n_res * ngroups) + (n_load - Q - n_free) + (n_free * ngroups)
-  }
+    # Get the correct number of free parameters depending on the possible combinations
+    # browser()
+    if (endo_group_specific == F) { # Is endogenous covariance group-specific?
+      nr_par_factors <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * nclus) + (n_cov_endo2 * nclus)
+      nr_pars <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * nclus) + (n_cov_endo2 * nclus) + (n_res * ngroups) + (n_load - Q - n_free) + (n_free * ngroups)
+    } else if (endo_group_specific == T) {
+      nr_par_factors <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * ngroups) + (n_cov_endo2 * ngroups)
+      nr_pars <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * ngroups) + (n_cov_endo2 * ngroups) + (n_res * ngroups) + (n_load - Q - n_free) + (n_free * ngroups)
+    }} else {
+      if (endo_group_specific == F) { # Is endogenous covariance group-specific?
+        nr_par_factors <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * nclus) + (n_cov_endo2 * nclus)
+        nr_pars <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * nclus) + (n_cov_endo2 * nclus) + n_load*ngroups + n_res*ngroups #number of loadings and residual variances
+      } else if (endo_group_specific == T) {
+        nr_par_factors <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * ngroups) + (n_cov_endo2 * ngroups)
+        nr_pars <- (nclus - 1) + (n_reg * nclus) + (n_cov_exo * ngroups) + (Q_endo1 * ngroups) + (n_cov_endo2 * ngroups) + n_load*ngroups + n_res*ngroups #number of loadings and residual variances
+      }
+    }
 
   # Calculate BIC
   # Observed
@@ -348,18 +380,18 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
   # Code from github user daob (Oberski, 2019): https://gist.github.com/daob/c2b6d83815ddd57cde3cebfdc2c267b3
   # p is the prior or posterior probabilities
   entropy <- function(p) {
-      p <- p[p > sqrt(.Machine$double.eps)] # since Lim_{p->0} p log(p) = 0
-      sum(-p * log(p))
+    p <- p[p > sqrt(.Machine$double.eps)] # since Lim_{p->0} p log(p) = 0
+    sum(-p * log(p))
   }
   # browser()
   sum_entropy <- sum(apply(z_gks, 1, entropy)) # Total entropy
 
   # Entropy R2
   entropy.R2 <- function(pi, post) {
-      error_prior <- entropy(pi) # Class proportions
-      error_post <- mean(apply(post, 1, entropy))
-      R2_entropy <- (error_prior - error_post) / error_prior
-      R2_entropy
+    error_prior <- entropy(pi) # Class proportions
+    error_post <- mean(apply(post, 1, entropy))
+    R2_entropy <- (error_prior - error_post) / error_prior
+    R2_entropy
   }
 
   R2_entropy <- entropy.R2(pi = pi_ks, post = z_gks)
@@ -424,8 +456,7 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
   R2 <- array(data = NA, dim = c(Q, Q, ngroups))
   R2 <- 1 - (res_var/tot_var)
   R2 <- apply(R2, 3, diag) # Get only the explained variances
-  R2 <- R2[endog, ]
-  if(length(endog) == 1){R2 <- t(R2)} # Ensure we have a matrix instead of a vector, even if we only have on endog factor
+  if(length(endog) == 1){R2 <- t(R2)} # Ensure we have a matrix instead of a vector, even if we only have one endog factor
   colnames(R2) <- g_name
 
   output <- (list(
@@ -437,7 +468,7 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL,
                          theta = theta_gs, beta_ks = beta_ks, cov_eta = cov_eta), # Factor covariance matrix from first step
     logLik        = list(loglik        = LL, # Final logLik of the model (its meaning depends on argument "sam_method")
                          global_loglik = ifelse(test = sam_method == "global", global_LL, NA), # Only valid if sam_method = "global"
-                    #     loglik_gksw   = loglik_gksw, # Weighted logLik per group-cluster combinations
+                         #     loglik_gksw   = loglik_gksw, # Weighted logLik per group-cluster combinations
                          runs_loglik   = loglik_nstarts, # loglik for each start
                          obs_loglik    = Obs.LL), # Only useful if fit = "local"
     model_sel     = list(BIC        = list(observed = list(BIC_N = Obs.BIC_N, BIC_G = Obs.BIC_G),
@@ -475,12 +506,13 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
   s1_dummy <- lavaan::cfa(
     model = model_dummy, data = centered, group = group,
     test = "none",
-    baseline = FALSE, loglik = FALSE,
+    baseline = FALSE, h1 = FALSE,
+    implied = FALSE, loglik = FALSE,
     do.fit = FALSE,
     ...
   )
 
-  S_biased <- lapply(lavaan::lavInspect(s1_dummy, "samplestats"), "[[", "cov")
+  S_biased <- s1_dummy@SampleStats@cov
 
   # Step 1: Get group-specific factor covariances
   # Perform Step 1 according to the number of measurement blocks
@@ -612,6 +644,319 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
   ))
 }
 
+# Step 1 function: ML-CFA --------------------------------------------------------------------------------
+Step1_ML <- function(S1, s1_fit = NULL, centered, group){
+  start_time_step1 <- Sys.time()  # Start time for Step 1
+
+  M <- length(S1$mplus_models) # How many measurement blocks
+  nfactors <- length(S1$lat_var) # How many factors
+  latvar_mplus <- toupper(S1$lat_var) # Mplus lv names
+  var_mplus <- S1$vars # Mplus ov names
+
+  # Initialize the results list
+  res_temp <- vector(mode = "list", M)
+  if(is.null(s1_fit)){s1_fit <- vector(mode = "list", M)}
+  post_est_ordered <- vector(mode = "list", M)
+  matching_columns <- matching_columns_sd <- list()
+
+  # Loop over each factor to run ML-CFA
+  for (i in 1:M) {
+    if(is.null(s1_fit[[i]])){
+      # Define Mplus model
+      mod <- mplusObject(
+        TITLE = "Multilevel CFA;",
+        VARIABLE = paste("USEVARIABLES =", group, var_mplus[[i]], ";",
+                         "\nWITHIN = ", var_mplus[[i]], ";",
+                         "\nCLUSTER =", group, ";"),
+        DEFINE = paste0("CENTER ", paste(var_mplus[[i]], "(GROUPMEAN);")),
+        ANALYSIS = "TYPE = RANDOM TWOLEVEL;\nESTIMATOR = BAYES;\nITERATIONS = 10000;\nCONVERGENCE = 0.000001;",
+        MODEL = S1$mplus_models[[i]],
+        SAVEDATA = paste0("\nFILE IS ", paste0("Fscores", i, ".dat"), ";\nSAVE = FSCORES(100 10);\nFORMAT IS FREE;"),
+        OUTPUT = "FSCOMPARISON; ",
+        rdata = centered)
+
+      # Run Mplus model and store results
+      res_temp[[i]] <- mplusModeler(mod, modelout = paste0("cfa", i, ".inp"), run = 1L)
+      s1_fit[[i]] <- res_temp[[i]][["results"]]
+    }
+
+    # instead of running Mplus model, call mplus output file
+    col_names <- colnames(s1_fit[[i]][["savedata"]])
+    matched_col <- col_names[toupper(group) == col_names] #Mplus group name
+
+    post_est_ordered[[i]] <- s1_fit[[i]][["savedata"]][order(s1_fit[[i]][["savedata"]][[matched_col]]), ]
+    N_gs <- as.numeric(table(post_est_ordered[[i]][[matched_col]])) #within-group sample size
+    ngroups <- length(unique(post_est_ordered[[i]][[matched_col]])) #the number of groups
+
+    # Regular expression pattern to match either '%W' or nothing, and allow optional spaces before 'Mean'
+    pattern <- paste0("^(", paste(latvar_mplus, collapse = "|"), ")(%W)?\\s*Mean$")
+    # Locate columns matching the pattern
+    matching_columns[[i]] <- grep(pattern, names(post_est_ordered[[i]]), value = TRUE)
+
+    # Regular expression pattern to match either '%W' or nothing, and allow optional spaces before 'Mean'
+    pattern_sd <- paste0("^(", paste(latvar_mplus, collapse = "|"), ")(%W)?\\s*Standard D*")
+    # Locate columns matching the pattern
+    matching_columns_sd[[i]] <- grep(pattern_sd, names(post_est_ordered[[i]]), value = TRUE)
+  }
+
+  # Intermediate Step: the single-indicator approach (factor scores) ---------------------------------
+  # posterior mean estimates of factor scores
+  postmeanfs <- do.call(cbind, lapply(seq_along(post_est_ordered), function(i) {
+    post_est_ordered[[i]][, matching_columns[[i]], drop = FALSE]
+  }))
+  # factor scores
+  fscores <- data.frame(cbind(postmeanfs, post_est_ordered[[1]][[matched_col]]))
+  vars <- paste0("single", c(1:nfactors)) #observed var
+  colnames(fscores) <- c(vars, "group")
+  fcovdat <- lapply(split(fscores[, 1:nfactors], fscores$group), cov) # factor score covariances
+  fcovdat <- array(unlist(fcovdat), dim = c(nfactors, nfactors, ngroups))
+  postmeanfs_list <- split(fscores[, 1:nfactors], fscores$group)
+
+  # posterior standard deviation/variance estimates of factor scores
+  postvarfs <- cbind((do.call(cbind, lapply(seq_along(post_est_ordered), function(i) {
+    post_est_ordered[[i]][, matching_columns_sd[[i]], drop = FALSE]
+  })))^2, post_est_ordered[[1]][[matched_col]])
+  colnames(postvarfs) <- c(vars, "group")
+  postvarfs_list <- split(postvarfs[, 1:nfactors], postvarfs$group)
+
+  # factor variances computed based on factor scores and their variances
+  fvar_compute <- replicate(nfactors, numeric(ngroups), simplify = FALSE)
+  for (i in 1:nfactors) {
+    for (j in 1:ngroups) {
+      fvar_compute[[i]][j] <- var(postmeanfs_list[[j]][,i]) + mean(postvarfs_list[[j]][,i])
+    }
+  }
+
+  # single-indicator loadings (rhos)
+  rho <- lapply(1:nfactors, function(i) sapply(1:ngroups, function(j) var(postmeanfs_list[[j]][,i]) / fvar_compute[[i]][j]))
+  lambda <- array(0, dim = c(nfactors, nfactors, ngroups))
+  for (j in 1:ngroups) lambda[,,j] <- diag(sapply(rho, `[`, j))
+  dimnames(lambda)[[1]] <- vars
+  dimnames(lambda)[[2]] <- S1$lat_var
+
+  # single-indicator unique variances
+  resvar <- lapply(1:ngroups, function(j) sapply(1:nfactors, function(i) fvar_compute[[i]][j] * rho[[i]][j] * (1 - rho[[i]][j])))
+  theta <- array(unlist(lapply(1:ngroups, function(j) {
+    diag(resvar[[j]])  # Create diagonal matrix for each group
+  })), dim = c(nfactors, nfactors, ngroups))
+  dimnames(theta)[[1]] <- dimnames(theta)[[2]] <-  vars
+
+  # single-indicator fcov: Croon's formula
+  cov_eta <-  array(data = 0, dim = c(nfactors, nfactors, ngroups))
+  for (j in 1:ngroups) {
+    cov_eta[,,j] <- solve(lambda[,,j]) %*% (fcovdat[,,j] - theta[,,j]) %*% solve(t(lambda[,,j]))
+  }
+  dimnames(cov_eta)[[1]] <- dimnames(cov_eta)[[2]] <-  S1$lat_var
+
+  # single-indicator data (center the data per group, so that the mean for all variables in each group is 0)
+  centered_fs <- fscores
+  g_name <- as.character(unique(fscores[, "group"]))
+  group.idx <- match(fscores[,"group"], g_name)
+  group.sizes <- tabulate(group.idx)
+  group.means <- rowsum.default(as.matrix(fscores[,vars]),
+                                group = group.idx, reorder = FALSE,
+                                na.rm = FALSE)/group.sizes
+  centered_fs[,vars] <- fscores[,vars] - group.means[group.idx, ,drop = FALSE]
+
+  # Get sample covariance matrix per group (used later)
+  S_unbiased <- lapply(X = unique(centered_fs[, "group"]), FUN = function(x) {cov(centered_fs[centered_fs[, "group"] == x, vars])})
+  S_biased <- list()
+  for (g in 1:ngroups) {
+    S_biased[[g]] <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
+  }
+
+  ##for step2
+  lambda_gs <- lapply(seq(dim(lambda)[3]), function(x) lambda[ , , x])
+  theta_gs <- lapply(seq(dim(theta)[3]), function(x) theta[ , , x])
+  cov_eta <- lapply(1:ngroups, function(i) cov_eta[,,i])
+
+  end_time_step1 <- Sys.time()  # End time for Step 1
+  step1_duration <- difftime(end_time_step1, start_time_step1, units = "mins")
+  cat("Step 1 completed in", step1_duration, "minutes\n")
+
+  return(list(
+    S1output     = s1_fit,
+    lambda_gs    = lambda_gs,
+    theta_gs     = theta_gs,
+    cov_eta      = cov_eta,
+    ngroups      = ngroups,
+    N_gs         = N_gs,
+    single_data  = centered_fs,
+    S_biased     = S_biased,
+    S_unbiased   = S_unbiased
+  ))
+}
+
+# Step 1 function: MG-BCFA with AMI --------------------------------------------------------------------------------
+Step1_BSEM <- function(S1, s1_fit = bfit_MM, centered, group,
+                       group.equal = c("loadings"), # metric invariance
+                       wiggle = c("loadings"), # approximate metric invariance
+                       wiggle.sd = sqrt(0.1), # size of prior sd
+                       bcontrol = list(cores = 3), # parallelizing the chains
+                       seed = 100, ...){
+
+  start_time_step1 <- Sys.time()  # Start time for Step 1
+  # centered data
+  g_name <- as.character(unique(centered[, group]))
+  # vars <- lavNames(lavaanify(S1, auto = TRUE)) #org observed var
+  lat_var <- lavNames(lavaanify(S1, auto = TRUE), "lv") #latent var
+
+  # centered
+  group.idx <- match(centered[,group], g_name)
+  group.sizes <- tabulate(group.idx)
+  # group.means <- rowsum.default(as.matrix(data[,vars]),
+  #                               group = group.idx, reorder = FALSE,
+  #                               na.rm = FALSE)/group.sizes
+  # centered[,vars] <- data[,vars] - group.means[group.idx, ,drop = FALSE]
+
+  # relevant information
+  M <- length(S1) # How many measurement blocks
+  nfactors <- length(lat_var) # How many factors
+
+  if(is.null(s1_fit)) {s1_fit <- vector(mode = "list", M)}
+
+  extract_results <- function(fit) {
+    list(
+      est      = blavInspect(fit, "est", add.class = FALSE, add.labels = TRUE), #parameters
+      lvs      = blavInspect(fit, "lvs"),
+      lvmeans  = blavInspect(fit, "lvmeans"), #mean factor scores
+      fit      = fitMeasures(fit), #model fit
+      psrf     = blavInspect(fit, "psrf") #convergence
+    )
+  }
+
+  # what to save
+  bfit_MM <- EST <- lvs <- lvmeans <- fit_blavaan <- psrf_list <- vector(mode='list', M)
+  # MG-BCFA per factor
+  for (i in 1:M) {
+    if (is.null(s1_fit[[i]])) {
+      # estimate fresh models
+      s1_fit[[i]] <- blavaan::bcfa(
+        data = centered, model = S1[[i]], group = group,
+        group.equal = group.equal,
+        wiggle = wiggle, wiggle.sd = wiggle.sd,
+        save.lvs = TRUE, bcontrol = bcontrol, seed = seed
+      )
+    }
+    # if not null, then reuse existing fits
+    bfit_MM[[i]] <- s1_fit[[i]]
+
+    res <- extract_results(bfit_MM[[i]])
+    EST[[i]]        <- res$est
+    lvs[[i]]        <- res$lvs
+    lvmeans[[i]]    <- res$lvmeans
+    fit_blavaan[[i]]<- res$fit
+    psrf_list[[i]]  <- res$psrf
+  }
+
+  lvmeans <- do.call(cbind, lvmeans) #mean factor scores
+  fit_blavaan <- do.call(cbind, fit_blavaan)
+  # colnames(fit_blavaan) <- lat_var
+
+  sample_size <- nrow(centered)
+  N_gs <- group.sizes
+  ngroups <- length(group.sizes)
+  nfactors <- length(lat_var)
+
+  # Intermediate Step: the single-indicator approach (factor scores) ---------------------------------
+  # posterior mean estimates of factor scores
+  postmeanfs <- data.frame(cbind(lvmeans, centered[,group]))
+  vars_single <- paste0("single", c(1:nfactors)) #observed var
+  colnames(postmeanfs) <- c(vars_single, "group")
+  postmeanfs_list <- split(postmeanfs[, 1:nfactors], postmeanfs$group)
+
+  # single-indicator data cov
+  fcovdat_cov <- lapply(postmeanfs_list, function(x) cov(x))
+  fcovdat <- array(unlist(fcovdat_cov), dim = c(nfactors, nfactors, ngroups))
+
+  # posterior standard deviation/variance estimates of factor scores
+  # MCMC chains to compute post.sd for each person
+  postvarfs <- do.call(cbind, lapply(lvs, function(lv) {
+    lvs_factor <- do.call("rbind", lv)
+    Mfactors <- ncol(lvs_factor) / sample_size  # Calculate number of factors
+
+    # Split columns by factors and compute variance for each factor
+    factor_vars <- lapply(1:Mfactors, function(f) {
+      factor_cols <- ((f - 1) * sample_size + 1):(f * sample_size)  # Select columns for the current factor
+      apply(lvs_factor[, factor_cols], 2, var)  # Compute variance across columns
+    })
+
+    do.call(cbind, factor_vars)  # Combine variances for all factors
+  }))
+
+  postvarfs <- data.frame(cbind(postvarfs, centered[,group]))
+  colnames(postvarfs) <- c(vars_single, "group")
+  postvarfs_list <- split(postvarfs[, 1:nfactors], postvarfs$group)
+
+  # factor variances computed based on factor scores and their variances
+  fvar_compute <- replicate(nfactors, numeric(ngroups), simplify = FALSE)
+  for (f in 1:nfactors) {
+    for (g in 1:ngroups) {
+      fvar_compute[[f]][g] <- var(postmeanfs_list[[g]][,f]) + mean(postvarfs_list[[g]][,f])
+    }
+  }
+
+  # single-indicator loadings (rhos)
+  rho <- lapply(1:nfactors, function(i) sapply(1:ngroups, function(j) var(postmeanfs_list[[j]][,i]) / fvar_compute[[i]][j]))
+  lambda <- array(0, dim = c(nfactors, nfactors, ngroups))
+  for (j in 1:ngroups) lambda[,,j] <- diag(sapply(rho, `[`, j))
+  dimnames(lambda)[[1]] <- vars_single
+  dimnames(lambda)[[2]] <- lat_var
+
+  # single-indicator unique variances
+  resvar <- lapply(1:ngroups, function(j) sapply(1:nfactors, function(i) fvar_compute[[i]][j] * rho[[i]][j] * (1 - rho[[i]][j])))
+  theta <- array(unlist(lapply(1:ngroups, function(j) {
+    diag(resvar[[j]])  # Create diagonal matrix for each group
+  })), dim = c(nfactors, nfactors, ngroups))
+  dimnames(theta)[[1]] <- dimnames(theta)[[2]] <-  vars_single
+
+  # single-indicator fcov: Croon's formula
+  cov_eta <-  array(data = 0, dim = c(nfactors, nfactors, ngroups))
+  for (j in 1:ngroups) {
+    cov_eta[,,j] <- solve(lambda[,,j]) %*% (fcovdat[,,j] - theta[,,j]) %*% solve(t(lambda[,,j]))
+  }
+  dimnames(cov_eta)[[1]] <- dimnames(cov_eta)[[2]] <-  lat_var
+
+  # single-indicator data (center the data per group, so that the mean for all variables in each group is 0)
+  centered_fs <- postmeanfs
+  g_name <- as.character(unique(postmeanfs[, "group"]))
+  group.idx <- match(postmeanfs[,"group"], g_name)
+  group.sizes <- tabulate(group.idx)
+  group.means <- rowsum.default(as.matrix(postmeanfs[,vars_single]),
+                                group = group.idx, reorder = FALSE,
+                                na.rm = FALSE)/group.sizes
+  centered_fs[,vars_single] <- postmeanfs[,vars_single] - group.means[group.idx, ,drop = FALSE]
+
+  # Get sample covariance matrix per group (used later)
+  S_unbiased <- lapply(X = unique(centered_fs[, "group"]), FUN = function(x) {cov(centered_fs[centered_fs[, "group"] == x, vars_single])})
+  S_biased <- list()
+  for (g in 1:ngroups) {
+    S_biased[[g]] <- S_unbiased[[g]] * (N_gs[[g]] - 1) / N_gs[[g]]
+  }
+
+  ##for step2
+  lambda_gs <- lapply(seq(dim(lambda)[3]), function(x) lambda[ , , x])
+  theta_gs <- lapply(seq(dim(theta)[3]), function(x) theta[ , , x])
+  cov_eta <- lapply(1:ngroups, function(i) cov_eta[,,i])
+
+  end_time_step1 <- Sys.time()  # End time for Step 1
+  step1_duration <- difftime(end_time_step1, start_time_step1, units = "mins")
+  cat("Step 1 completed in", step1_duration, "minutes\n")
+
+  return(list(
+    S1output     = s1_fit,
+    lambda_gs    = lambda_gs,
+    theta_gs     = theta_gs,
+    cov_eta      = cov_eta,
+    ngroups      = ngroups,
+    N_gs         = N_gs,
+    single_data  = centered_fs,
+    S_biased     = S_biased,
+    S_unbiased   = S_unbiased
+  ))
+}
+
+
 # Step 2 function ----------------------------------------------------------------------------------
 # Step 2 wrapper for the fast and slow estimation
 Step2 <- function(ngroups             = ngroups,
@@ -636,7 +981,8 @@ Step2 <- function(ngroups             = ngroups,
                   userStart           = userStart,
                   printing            = printing,
                   s1ori               = s1ori,
-                  only_slow           = only_slow){
+                  only_slow           = only_slow,
+                  s1_type            = s1_type){
 
 
   # Do a fake sem() to obtain the correct settings to use in Step 2
@@ -693,7 +1039,8 @@ Step2 <- function(ngroups             = ngroups,
                          partition           = partition,
                          userStart           = userStart,
                          printing            = printing,
-                         s1ori               = s1ori)
+                         s1ori               = s1ori,
+                         s1_type            = s1_type)
 
       results_nstarts <- SM_1$results_nstarts
       z_gks_nstarts   <- SM_1$z_gks_nstarts
@@ -824,7 +1171,8 @@ Step2 <- function(ngroups             = ngroups,
                      partition           = partition,
                      userStart           = userStart,
                      printing            = printing,
-                     s1ori               = s1ori)
+                     s1ori               = s1ori,
+                     s1_type            = s1_type)
 
     results_nstarts <- SM$results_nstarts
     z_gks_nstarts   <- SM$z_gks_nstarts
@@ -883,7 +1231,8 @@ Step2_fast <- function(ngroups             = ngroups,
                        partition           = partition,
                        userStart           = userStart,
                        printing            = printing,
-                       s1ori               = s1ori){
+                       s1ori               = s1ori,
+                       s1_type            = s1_type){
 
   # We perform a MULTI-START procedure to avoid local maxima.
   # Initialize objects to store results per random start.
@@ -991,19 +1340,20 @@ Step2_fast <- function(ngroups             = ngroups,
   cov_eta <- lapply(1:ngroups, function(x) {
     reorder(cov_eta[[x]], exog = exog, endog = endog)
   })
-  lambda_gs <- lapply(1:ngroups, function(x) {
-    reorder_obs(lambda_gs[[x]], matrix = "lambda", exog = exog, endog = endog,
-                endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
-  })
-  theta_gs <- lapply(1:ngroups, function(x) {
-    reorder_obs(theta_gs[[x]], matrix = "theta", exog = exog, endog = endog,
-                endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
-  })
-  S_unbiased <- lapply(1:ngroups, function(x) {
-    reorder_obs(S_unbiased[[x]], matrix = "theta", exog = exog, endog = endog,
-                endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
-  })
-
+  if(s1_type == "lavaan"){ #mplus/blavaan: single-indicators
+    lambda_gs <- lapply(1:ngroups, function(x) {
+      reorder_obs(lambda_gs[[x]], matrix = "lambda", exog = exog, endog = endog,
+                  endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
+    })
+    theta_gs <- lapply(1:ngroups, function(x) {
+      reorder_obs(theta_gs[[x]], matrix = "theta", exog = exog, endog = endog,
+                  endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
+    })
+    S_unbiased <- lapply(1:ngroups, function(x) {
+      reorder_obs(S_unbiased[[x]], matrix = "theta", exog = exog, endog = endog,
+                  endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
+    })
+  }
   # Multi-start
   for (s in 1:nstarts) {
     if (printing == T) {
@@ -1532,7 +1882,7 @@ Step2_slow <- function(ngroups             = ngroups,
                                                   loglik = FALSE,
                                                   sample.cov.rescale = FALSE,
                                                   fixed.x = TRUE
-                                                  ))
+  ))
 
   # Get the labels of the endogenous 1 and 2 factors
   endog1 <- lat_var[(lat_var %in% fake_model$rhs[which(fake_model$op == "~")]) &
@@ -2406,8 +2756,6 @@ EStep <- function(pi_ks, ngroup, nclus, loglik){
 
   return(z_gks)
 }
-
-
 
 
 
