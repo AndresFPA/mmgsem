@@ -3,18 +3,14 @@
 #' Performs a mixture clustering based on the structural parameters (i.e., regressions) of a SEM model.
 #' The estimation is done in a step-wise fashion and uses an expectation-maximization (EM) algorithm in the second step.
 #'
-#' INPUT: Arguments required by the function
-#' @param dat Observed data of interest for the MMGSEM model.
-#' @param S1 Measurement model (MM). Used in step 1. Must be a string (like in lavaan).
-#'                   Can be a list of strings determing the number of measurement blocks (e.g., one string for the MM of
-#'                   factor 1, and a second string for the MM of factor 2)
-#' @param S2 Structural model. Used in step 2. Must be a string (like in lavaan).
-#' @param group Name of the group variable. Must be a string.
-#' @param nclus Pre-specified number of clusters.
-#' @param seed Pre-defined seed for the random start in case a replication is needed in the future.
-#' @param userStart Pre-defined start provided by the user. Must be a matrix of dimensions ngroups*nclus.
-#'                  A 1 represents that the row group is in the column cluster. There must be only one 1
-#'                  in each row. The function will return results only for this start.
+#' @param dat Data frame containing observed variables and a grouping variable..
+#' @param S1 Step 1 (measurement model) specification using lavaan syntax. Can be a list of strings determing the number of measurement blocks (e.g., one string for the MM of factor 1, and a second string for the MM of factor 2).
+#'           If s1_type = "mplus", S1 must be written in mplus syntax.
+#' @param S2 Step 2 (structural model) specification using lavaan syntax.
+#' @param group Name of the grouping variable (as a character string).
+#' @param nclus Integer. Number of clusters to be estimated in Step 2.
+#' @param seed Optional. Random seed for replicable results.
+#' @param userStart Optional. A user-defined cluster membership matrix (dimensions: number of groups × number of clusters) with binary values (1 or 0; 1 indicates cluster membership). To be used when the user has prior knowledge about the data. There must be only one 1 for each row. Skips random starts.
 #'                  Example for 6 groups and 2 clusters:
 #'
 #'                                   [,1] [,2]
@@ -25,44 +21,42 @@
 #'                             [5,]    0    1
 #'                             [6,]    0    1
 #'
-#' @param s1_fit Resulting lavaan object from a cfa() analysis. Can be used to directly input the results from the step 1
-#'              if the user only wants to use MMGSEM() to estimate the structural model (Step 2). If not NULL, MMGSEM()
-#'              will skip the estimation of Step 1 and use the s1out object as the input for Step 2. If NULL, MMGSEM() will
-#'              estimate both step 1 and step 2.
-#' @param max_it Maximum number of iterations for each start.
-#' @param nstarts Number of random starts that will be performed (in an attempt to avoid local maxima).
-#' @param partition Type of random partition used to start the EM algorithm. Can be "hard" and "soft".
-#' @param constraints String containing the constrains of the model. Receives the same input as group.equal in lavaan.
-#' @param NonInv String containing the non-invariances of the model. Similar to group.partial in lavaan.
-#' @param endogenous_cov TRUE or FALSE argument to determine whether to allow or not covariance between purely endogeonus variables.
-#'                       If TRUE (the default), the covariance between endogenous factors is allowed.
-#' @param endo_group_specific TRUE or FALSE. Determines whether the endogenous covariances are group (T) or cluster (F) specific.
-#'                            By default, it is TRUE.
+#' @param s1_type String. Determines which model is used when estimating step 1. Can be "lavaan" (CFA), "blavaan" (BCFA), or "mplus" (ML-CFA).
+#' @param s1_fit Optional. A fitted model object for Step 1. Can be from lavaan (CFA), blavaan (BCFA), or MplusAutomation (ML-CFA).
+#' @param max_it Maximum number of iterations for Step 2 (default = 10000).
+#' @param nstarts Number of random starts for Step 2 (default = 20)..
+#' @param partition Initialisation partition for random starts: "hard" (default) or "soft".
+#' @param endogenous_cov Logical. If TRUE (default), residual covariances among purely endogenous latent variables are estimated. If FALSE, they are fixed to 0 and only the residual variances are estimated.
+#' @param endo_group_specific Logical. If TRUE (default), residual covariances are group- and cluster-specific (i.e., they are estimated for every group-cluster combination). If FALSE, they are cluster-specific (i.e., they are fixed to be equal across groups within a cluster). Note that, if FALSE, the residual covariances will also influence the clustering.
 #' @param sam_method either "local" or "global. Follows local and global approaches from the SAM method. GLOBAL NOT FUNCTIONAL YET.
 #' @param rescaling Only used when data is ordered. By default, MMGSEM uses the marker variable scaling approach. But identification
 #'                  constraints with ordinal data (by default) are handled by standardizing the factors' variance in the first step.
 #'                  The rescaling argument (either T or F) rescales the factor variances and loadings to the marker variable scaling
 #'                  before running step 2. It is set to T by default (rescaling happens). If set to F, the factor variances are kept fixed to 1.
+#' @param meanstr Logical. If TRUE, includes the mean structure in the model (e.g., for scalar invariance).
+#' @param ordinal Logical. If TRUE, observed variables are treated as ordinal (default = FALSE)
 #' @param ... MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
 #'            and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables,
 #'            group.equal for constraints, group.partial for non-invariances, etc.
 #'
-#' OUTPUT: The function will return a list with the following results:
-#' @return z_gks: Posterior classification probabilities or cluster memberships (ngroups*nclus matrix).
+#' OUTPUT:
+#' @return The function will return a list with the following results:
+#' @return posteriors: A groups × clusters matrix of posterior membership probabilities.
+#' @return modal_post: A hard classification matrix indicating the most likely cluster for each group.
 #' @return final_fit: Lavaan fit of the best and final model (not useful, only for testing purposes).
-#' @return psi_gks: Resulting psi matrices (i.e., residual factor covariances) for each group-cluster combination.
-#' @return lambda: Resulting invariant lambda matrix (i.e., factor loadings) for all groups.
-#' @return theta_gs: Resulting theta matrices (i.e., items' residual/unique variances) for each group.
-#' @return beta_ks: Resulting beta matrices (i.e., regression coefficients) for each cluster.
-#' @return loglikelihood: Total loglikelihood of the best model.
-#' @return logliks_starts: Total loglikelihood of the models of each run (allows to check sensitivity to local maxima).
-#' @return Obs_loglik: Reconstruction of the observed loglikelihood after the model has converged. Only valid when
-#'                     fit is "factors".
-#'
-#' PLEASE NOTE: This function requires 'lavaan' package to work.
+#' @return MM: Fitted measurement model (Step 1; i.e., cfa, bcfa, or ml-cfa). Returns the user-supplied model if provided.
+#' @return param: A list of model parameters, including lambda_gs, theta_gs, beta_ks, psi_gks, and cov_eta.
+#' @return logLik: A list of log-likelihood values: final model (only Step 2), random starts, and full model (Step 1 + Step 2).
+#' @return model_sel: Model selection metrics such as BIC, AIC, and ICL.
+#' @return sample.stats: Observed sample covariance matrices.
+#' @return NrPar: A list containing the number of parameters.
+#' @return N_gs: The sample size per group.
+#' @return nstarts: The number of random starts used in step 2.
+#' @return ngroups: Total number of groups.
+#' @return iter: The number of iterations needed to reach convergence (from the best random start).
+#' @return R2: A matrix containing the explained variance of each endogenous latent variable per group.
 #'
 #' @export
-
 mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
                    group, nclus, seed = NULL, userStart = NULL, s1_fit = NULL,
                    max_it = 10000L, nstarts = 20L, printing = TRUE,
