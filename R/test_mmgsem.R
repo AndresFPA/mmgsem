@@ -29,11 +29,18 @@ test.mmgsem <- function(model, se, multiple_comparison = FALSE) {
   betas_se           <- se$SE_vector$betas_se
   betas_se_corrected <- se$SE_vector$betas_se_corrected
 
+  # Check whether the user requested corrected se
+  check              <- se$SE_vector$betas_se_corrected
+
   # Extract betas as vector
   betas_vector       <- se$estimates_vector$betas_est
 
   # Identify how many regression parameters we have
-  regressions        <- betas_se_corrected[grepl(paste0("k1$"), names(betas_se_corrected))]
+  if(is.null(check)){
+    regressions        <- betas_se[grepl(paste0("k1$"), names(betas_se))]
+  } else {
+    regressions        <- betas_se_corrected[grepl(paste0("k1$"), names(betas_se_corrected))]
+  }
   n_reg              <- length(regressions)
 
   # Get a "clean" object of regression parameters (without the .k)
@@ -135,8 +142,13 @@ test.mmgsem <- function(model, se, multiple_comparison = FALSE) {
       cat("\nParameter", regressions[b], ":\n")
 
       # Extract the relevant parameters
-      betas_relevant        <- betas_vector[grepl(paste0("^", regressions[b]), names(betas_vector))]
-      se_corrected_relevant <- betas_se_corrected[grepl(paste0("^", regressions[b]), names(betas_se_corrected))]
+      betas_relevant   <- betas_vector[grepl(paste0("^", regressions[b]), names(betas_vector))]
+
+      if(is.null(check)){
+        se_relevant    <- betas_se[grepl(paste0("^", regressions[b]), names(betas_se))]
+      } else {
+        se_relevant    <- betas_se_corrected[grepl(paste0("^", regressions[b]), names(betas_se_corrected))]
+      }
 
       test_df$Cluster_comparison <- combinations
 
@@ -153,8 +165,8 @@ test.mmgsem <- function(model, se, multiple_comparison = FALSE) {
           diff_beta <- beta_k_i - beta_k_j
 
           # Get correct SE
-          se_k_i <- se_corrected_relevant[grepl(paste0("k", i, "$"), names(se_corrected_relevant))]
-          se_k_j <- se_corrected_relevant[grepl(paste0("k", j, "$"), names(se_corrected_relevant))]
+          se_k_i <- se_relevant[grepl(paste0("k", i, "$"), names(se_relevant))]
+          se_k_j <- se_relevant[grepl(paste0("k", j, "$"), names(se_relevant))]
           pooled_se <- sqrt((se_k_i^2) + (se_k_j^2))
 
           # Z-score

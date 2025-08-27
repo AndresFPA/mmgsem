@@ -104,6 +104,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
   if(naive == TRUE){ # If the user only wants the naive standard error, stop here.
     # Vcov matrix of the step 2 parameters
     Sigma_2 <- MASS::ginv(-HESS.S2)
+    colnames(Sigma_2) <- rownames(Sigma_2) <- colnames(HESS.S2)
 
     # vector form
     vector_SE <- sqrt(diag(Sigma_2))

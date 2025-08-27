@@ -415,6 +415,7 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
 
   # Add the group name to the posterior matrix
   z_gks       <- as.data.frame(z_gks)
+  z_gks       <- round(z_gks, 4)
   z_gks$Group <- g_name
   g_col_idx   <- ncol(z_gks)
   z_gks       <- z_gks[,c(g_col_idx, 1:(g_col_idx-1))] # Reorder with Group column as the first column
