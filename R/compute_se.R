@@ -1,16 +1,15 @@
 #' Standard Errors (SE) wrapper for MMGSEM
 #'
 #' @description
-#' A wrapper to compute the SE of a fitted object by MMG-SEM. It will use the Hessian matrix to compute the SE of both the measurement and the structural parameters.
+#' A wrapper to compute the SE of a fitted object by mmgsem(). It obtains the SE by numerically computing the second derivative of the loglikelihood function.
 #'
-#' @usage se(object)
+#' @usage se(object, d = 1e-03, naive = FALSE)
 #'
-#' @param object A resulting fitted object from the MMGSEM function.
-#' @param d step size value used for the approximate numerical derivative. By default, it is 1e-03
-#' @param naive Logical argument. If TRUE, the function will return the standard errors of step 2 without the correction for stepwise estimation.
+#' @param object A fitted model returned by the mmgsem function.
+#' @param d Step size for numerical approximation of the derivative. Default is 1e-03.
+#' @param naive Logical. If TRUE, returns uncorrected SEs (faster but less accurate). If FALSE (default), applies the correction for step-wise estimation.
 #'
-#' @return SE: List with the SE for all parameters. The SE are inside matrices mimicking the matrices of the parameters themselves. It also contains the corrected SE.
-#' @return HESS: Hessian matrix containing all the second derivatives of the parameters (equivalent to the SE, but in other presentation).
+#' @returns SE_vector: List. Includes several vectors that contain the standard errors per type of parameter (beta, psi, etc.)
 #'
 #' @export
 compute_se <- function(object, d = 1e-03, naive = FALSE){
