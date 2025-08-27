@@ -4,16 +4,18 @@
 \alias{compute_se}
 \title{Standard Errors (SE) wrapper for MMGSEM}
 \usage{
-se(object)
+se(object, d = 1e-03, naive = FALSE)
 }
 \arguments{
-\item{object}{A resulting fitted object from the MMGSEM function.}
+\item{object}{A fitted model returned by the mmgsem function.}
+
+\item{d}{Step size for numerical approximation of the derivative. Default is 1e-03.}
+
+\item{naive}{Logical. If TRUE, returns uncorrected SEs (faster but less accurate). If FALSE (default), applies the correction for step-wise estimation.}
 }
 \value{
-SE: List with the SE for all parameters. The SE are inside matrices mimicking the matrices of the parameters themselves. It also contains the corrected SE.
-
-HESS: Hessian matrix containing all the second derivatives of the parameters (equivalent to the SE, but in other presentation).
+SE_vector: List. Includes several vectors that contain the standard errors per type of parameter (beta, psi, etc.)
 }
 \description{
-A wrapper to compute the SE of a fitted object by MMG-SEM. It will use the Hessian matrix to compute the SE of both the measurement and the structural parameters.
+A wrapper to compute the SE of a fitted object by mmgsem(). It obtains the SE by numerically computing the second derivative of the loglikelihood function.
 }

@@ -59,7 +59,7 @@
 #' @export
 mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
                    group, nclus, seed = NULL, userStart = NULL, s1_fit = NULL,
-                   max_it = 10000L, nstarts = 20L, printing = TRUE,
+                   max_it = 10000L, nstarts = 20L, printing = FALSE,
                    partition = "hard", endogenous_cov = TRUE,
                    endo_group_specific = TRUE,
                    sam_method = "local", meanstr = FALSE,
