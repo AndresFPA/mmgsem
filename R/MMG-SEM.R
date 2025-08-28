@@ -502,8 +502,7 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
   s1_dummy <- lavaan::cfa(
     model = model_dummy, data = centered, group = group,
     test = "none",
-    baseline = FALSE, h1 = FALSE,
-    implied = FALSE, loglik = FALSE,
+    baseline = FALSE, loglik = FALSE,
     do.fit = FALSE,
     ...
   )
