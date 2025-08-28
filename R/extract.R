@@ -13,7 +13,7 @@
 #' @export
 extract <- function(object, nclus){
   # First extract all models from the general object
-  Models <- modelSelection_fit$Models
+  Models <- object$Models
 
   # Check the number of clusters of each model and extract the desired model
   for(k in 1:length(Models)){
