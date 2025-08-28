@@ -77,6 +77,7 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
 
   # Call MMGSEM using the arguments provided by the user k times (one per required model)
   for(k in nclus[1]:nclus[2]){
+    set.seed(seed)
     # If the user provides output of the first step (s1out), use it for all models
     if(!is.null(s1_fit)){
       model_fit[[k]] <- mmgsem(dat = dat, S1 = S1, S2 = S2, s1_type = s1_type, group = group, nclus = k, seed = seed,
