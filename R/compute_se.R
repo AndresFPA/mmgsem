@@ -29,7 +29,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
 
   # We remove the 'nuisance' parameters. i.e., the parameters from the empty group-cluster combinations
   # Extract relevant psi_gks
-  psi_idx <- which(x = mmgsem_fit$modal_post == 1, arr.ind = T) # array indices of the relevant group-cluster combinations
+  psi_idx <- which(x = object$modal_post == 1, arr.ind = T) # array indices of the relevant group-cluster combinations
 
   # Reorder based on group number insted of column number
   correct_idx <- order(psi_idx[,1])
