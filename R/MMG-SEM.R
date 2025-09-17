@@ -1344,10 +1344,10 @@ Step2_fast <- function(ngroups             = ngroups,
       reorder_obs(theta_gs[[x]], matrix = "theta", exog = exog, endog = endog,
                   endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
     })
-    S_unbiased <- lapply(1:ngroups, function(x) {
-      reorder_obs(S_unbiased[[x]], matrix = "theta", exog = exog, endog = endog,
-                  endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
-    })
+    # S_unbiased <- lapply(1:ngroups, function(x) {
+    #   reorder_obs(S_unbiased[[x]], matrix = "theta", exog = exog, endog = endog,
+    #               endog1 = endog1, endog2 = endog2, S1 = S1, dat = dat)
+    # })
   }
   # Multi-start
   for (s in 1:nstarts) {
@@ -1617,9 +1617,9 @@ Step2_fast <- function(ngroups             = ngroups,
 
           ###### EXPERIMENT ######
           # If ordered = T force the variance of the factors to be 1 (to follow the scaling from step 1)
-          if (std.lv == T){
-            diag(psi) <- 1
-          }
+          # if (std.lv == T){
+          #   diag(psi) <- 1
+          # }
 
           # Store for future check
           psi_gks[[g, k]] <- psi
