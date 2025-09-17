@@ -160,9 +160,10 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
     # Centering the data requires the group means, which are dependent on possible NAs
 
     # Get sample covariance matrix per group (used later)
-    S_unbiased <- lapply(X = unique(centered[, group]), FUN = function(x) {
-      cov(centered[centered[, group] == x, vars])
-    })}
+    # S_unbiased <- lapply(X = unique(centered[, group]), FUN = function(x) {
+    #   cov(centered[centered[, group] == x, vars])
+    # })
+    }
 
   ## STEP 1 - MMG-SEM ----------------------------------------------------------------------------------------
   # Save the measurement model results
@@ -206,7 +207,7 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
     # browser()
     for (g in 1:ngroups) {
       # Extract the first loading of each item (the one that would be 1 if unstandardized)
-      loadings <- apply(lambda_gs[[g]], 2, function(x) {x[which(x != 0)]})[1, ]
+      loadings <- apply(lambda_gs[[g]], 2, function(col) {col[which(col != 0)]}[1])
       # Multiply standardized variances with squared corresponding loading
       sds <- sqrt(diag(cov_eta[[g]]) * loadings^2)
       # Re-scale everything to correlations first (depending on the constraints, only the first group may have a correlation in cov_eta)
