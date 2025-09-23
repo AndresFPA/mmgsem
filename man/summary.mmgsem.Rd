@@ -4,7 +4,7 @@
 \alias{summary.mmgsem}
 \title{Summary function for mmgsem}
 \usage{
-summary.mmgsem(model, se = NULL, model_selection = F)
+\method{summary}{mmgsem}(model, se = NULL, model_selection = F)
 }
 \arguments{
 \item{model}{Resulting object from a mmgsem model (must be a list). It can also be the resulting object from the ModelSelection() function.}

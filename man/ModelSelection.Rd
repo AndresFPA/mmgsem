@@ -8,6 +8,7 @@ ModelSelection(
   dat,
   S1 = NULL,
   S2 = NULL,
+  s1_type = "lavaan",
   group,
   nclus,
   seed = NULL,
@@ -22,6 +23,7 @@ ModelSelection(
   sam_method = "local",
   meanstr = FALSE,
   rescaling = F,
+  only_slow = FALSE,
   ...
 )
 }
@@ -32,6 +34,8 @@ ModelSelection(
 If s1_type = "mplus", S1 must be written in mplus syntax.}
 
 \item{S2}{Step 2 (structural model) specification using lavaan syntax.}
+
+\item{s1_type}{String. Determines which model is used when estimating step 1. Can be "lavaan" (CFA), "blavaan" (BCFA), or "mplus" (ML-CFA).}
 
 \item{group}{Name of the grouping variable (as a character string).}
 
@@ -75,8 +79,6 @@ before running step 2. It is set to T by default (rescaling happens). If set to 
 \item{...}{MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
 and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables,
 group.equal for constraints, group.partial for non-invariances, etc.}
-
-\item{s1_type}{String. Determines which model is used when estimating step 1. Can be "lavaan" (CFA), "blavaan" (BCFA), or "mplus" (ML-CFA).}
 
 \item{ordinal}{Logical. If TRUE, observed variables are treated as ordinal (default = FALSE)}
 }
