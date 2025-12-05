@@ -17,14 +17,15 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
 
   if(isFALSE(model_selection)){
     # Extract key components
-    beta_ks     <- model$param$beta_ks     # Regression parameters
-    nstarts     <- model$nstarts           # Random starts
-    iterations  <- model$iterations        # Random starts
-    loglik      <- model$logLik$loglik     # Factors' loglikelihood
-    obs_loglik  <- model$logLik$obs_loglik # Observed loglikelihood
-    BIC         <- model$model_sel$BIC     # BIC
-    AIC         <- model$model_sel$AIC     # AIC
-    posteriors  <- model$posteriors        # Posterior matrix
+    beta_ks     <- model$param$beta_ks        # Regression parameters
+    nstarts     <- model$nstarts              # Random starts
+    iterations  <- model$iterations           # Random starts
+    loglik      <- model$logLik$loglik        # Factors' loglikelihood
+    obs_loglik  <- model$logLik$obs_loglik    # Observed loglikelihood
+    R2entropy   <- model$model_sel$R2_entropy # Entropy
+    BIC         <- model$model_sel$BIC        # BIC
+    AIC         <- model$model_sel$AIC        # AIC
+    posteriors  <- model$posteriors           # Posterior matrix
 
     if(!is.null(se)){
       # Check whether the user requested corrected se
@@ -56,6 +57,7 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
     cat("Number of clusters: ", (ncol(posteriors)-1), "\n")
     cat("Number of random starts: ", nstarts, "\n")
     cat("Best start converged normally after", iterations, "iterations\n")
+    cat("Entropy:", R2entropy, "\n")
     cat("\nFinal Log-Likelihood (Step 2): ", loglik, "\n")
     cat("Final Log-Likelihood (Observed): ", obs_loglik, "\n")
 
@@ -147,7 +149,8 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
       cat("\nCluster ", k, ":\n", sep = "")
       cat(members_k)
     }
-
+    cat("\n")
+    
   } else if (isTRUE(model_selection)){
     Overview <- model$Overview
     lower_limit <- Overview$Clusters[1]

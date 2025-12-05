@@ -74,7 +74,12 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
   nrpar_fac <- vector(mode = "list", length = nmodels)
   R2entropy <- vector(mode = "list", length = nmodels)
 
-
+  # Prepare object for the progress bar
+  message("Model selection progress:\n")
+  pb <- utils::txtProgressBar(min = 0, max = nmodels, style = 3)
+  i_model <- 0
+  # on.exit(close(pb), add = TRUE)  # ensure it closes even if there’s an error
+  
   # Call MMGSEM using the arguments provided by the user k times (one per required model)
   for(k in nclus[1]:nclus[2]){
     # If the user provides output of the first step (s1out), use it for all models
@@ -100,8 +105,13 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
                                  partition = partition, endogenous_cov = endogenous_cov, only_slow = only_slow,
                                  endo_group_specific = endo_group_specific, sam_method = sam_method, ...)
       }
-      print(paste("model", k, "finished"))
+      # print(paste("model", k, "finished"))
     }
+    
+    # Update the progress bar
+    i_model <- i_model + 1
+    utils::setTxtProgressBar(pb, i_model)
+    
     # Save the model selection criteria
     BIC_G[[k]]     <- model_fit[[k]]$model_sel$BIC$observed$BIC_G
     BIC_N[[k]]     <- model_fit[[k]]$model_sel$BIC$observed$BIC_N
