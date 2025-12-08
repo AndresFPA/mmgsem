@@ -99,34 +99,48 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
         # Extract the relevant values for this cluster
         pattern <- paste0("k", k, "$")
         betas_se_k               <- betas_se[grepl(pattern, names(betas_se))]
-        betas_se_corrected_k     <- betas_se_corrected[grepl(pattern, names(betas_se_corrected))]
         betas_z_k                <- betas_z[grepl(pattern, names(betas_z))]
         betas_pvalue_k           <- betas_pvalue[grepl(pattern, names(betas_pvalue))]
+
+        betas_se_corrected_k     <- betas_se_corrected[grepl(pattern, names(betas_se_corrected))]
         betas_z_corrected_k      <- betas_z_corrected[grepl(pattern, names(betas_z_corrected))]
         betas_pvalue_corrected_k <- betas_pvalue_corrected[grepl(pattern, names(betas_pvalue_corrected))]
 
+        # Add confidence interval for a more complete overview
+        ci_lower_k <- beta_df$estimate - (1.96 * betas_se_k)
+        ci_upper_k <- beta_df$estimate + (1.96 * betas_se_k)
+
+        ci_lower_corrected_k <- beta_df$estimate - (1.96 * betas_se_corrected_k)
+        ci_upper_corrected_k <- beta_df$estimate + (1.96 * betas_se_corrected_k)
+
         # Round for cleaner presentation
         betas_se_k               <- round(betas_se_k, 3)
-        betas_se_corrected_k     <- round(betas_se_corrected_k, 3)
         betas_z_k                <- round(betas_z_k, 3)
         betas_pvalue_k           <- round(betas_pvalue_k, 3)
+        ci_lower_k               <- round(ci_lower_k, 3)
+        ci_upper_k               <- round(ci_upper_k, 3)
+
+        betas_se_corrected_k     <- round(betas_se_corrected_k, 3)
         betas_z_corrected_k      <- round(betas_z_corrected_k, 3)
         betas_pvalue_corrected_k <- round(betas_pvalue_corrected_k, 3)
+        ci_lower_corrected_k     <- round(ci_lower_corrected_k, 3)
+        ci_upper_corrected_k     <- round(ci_upper_corrected_k, 3)
 
-        # Original hypothesis testing (without correction) is not printed
-        # beta_df$se      <- betas_se_k
-        # beta_df$z_score <- betas_z_k
-        # beta_df$p_value <- betas_pvalue_k
 
         # Return naive or corrected depending on what the user provided
         if(is.null(check)){
-          beta_df$se      <- betas_se_k
-          beta_df$z_stat  <- betas_z_k
-          beta_df$p_value <- betas_pvalue_k
+          beta_df$se       <- betas_se_k
+          beta_df$z_stat   <- betas_z_k
+          beta_df$p_value  <- betas_pvalue_k
+          beta_df$ci.lower <- ci_lower_k
+          beta_df$ci.upper <- ci_upper_k
+
         } else {
-          beta_df$se      <- betas_se_corrected_k
-          beta_df$z_stat  <- betas_z_corrected_k
-          beta_df$p_value <- betas_pvalue_corrected_k
+          beta_df$se       <- betas_se_corrected_k
+          beta_df$z_stat   <- betas_z_corrected_k
+          beta_df$p_value  <- betas_pvalue_corrected_k
+          beta_df$ci.lower <- ci_lower_corrected_k
+          beta_df$ci.upper <- ci_upper_corrected_k
         }
       }
 
@@ -150,7 +164,7 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
       cat(members_k)
     }
     cat("\n")
-    
+
   } else if (isTRUE(model_selection)){
     Overview <- model$Overview
     lower_limit <- Overview$Clusters[1]
