@@ -88,6 +88,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
   vec_ind_S2[[3]] <- psi_idx # Psi matrix indices for psi_gks
 
   # First, let's compute the NAIVE standard errors
+  message("Naive Standard error computation (Step 2 parameters):\n")
   HESS.S2 <- compute_hessian(f       = obj.S2,
                              x       = param_vec_S2,
                              d       = d,
@@ -135,7 +136,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
   ##########################
   # STEP 1 STANDARD ERRORS #
   ##########################
-  # Get step 2 parameters into one single parameter vector
+  # Get step 1 parameters into one single parameter vector
   param_vec_S1 <- c(flat_lambda$vec, flat_theta$vec)
 
   # We need the indices of each type of parameter before we continue (it is to reconstruct the matrices later)
@@ -144,6 +145,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
   vec_ind_S1[[2]] <- which(param_vec_S1 %in% flat_theta$vec)
 
   # Now, let's compute the standard errors of step 1
+  message("Used for the standard error correction (Step 1 parameters):\n")
   HESS.S1 <- compute_hessian(f       = obj.S1,
                              x       = param_vec_S1,
                              d       = d,
@@ -172,6 +174,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
   vec_ind[[5]] <- psi_idx # Psi matrix indices for psi_gks
 
   # Now, compute the cross-derivatives
+  message("Used for the standard error correction (Cross-derivatives):\n")
   HESS <- compute_hessian(f       = obj,
                           x       = param_vec,
                           d       = d,
@@ -296,6 +299,10 @@ compute_hessian <- function(f,
           maps    = maps,
           flats   = flats)
 
+  # Prepare object for the progress bar
+  pb <- utils::txtProgressBar(min = 0, max = n, style = 3)
+  i_deriv <- 0
+
   for (i in 1:n) {
     x_up    <- x
     x_up[i] <- x_up[i] + d
@@ -330,6 +337,10 @@ compute_hessian <- function(f,
 
       x_up[j] <- x_up[j] - d
     }
+
+    # Update the progress bar
+    i_deriv <- i_deriv + 1
+    utils::setTxtProgressBar(pb, i_deriv)
   }
 
   return(H)
