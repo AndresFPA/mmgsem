@@ -43,10 +43,10 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
 
   # If the user requires the nuisance parameters (theoretically, more correct), include also those parameters.
   # It may be necessary with complicated models that involve many parameters
-  if(isTRUE(nuisance)){
-    # Which ones are NOT the correct cluster?
-    psi_empty_idx <- which(x = object$modal_post != 1, arr.ind = T)
+  # Which ones are NOT the correct cluster?
+  psi_empty_idx <- which(x = object$modal_post != 1, arr.ind = T)
 
+  if(isTRUE(nuisance)){
     # How long must the object be? ngroups*nclus - ngroups (only empty combinations)
     gk_minus  <- gro_clu - ngroups
     psi_empty <- vector("list", gk_minus)
@@ -75,34 +75,43 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
   map_theta  <- mapping_params(mat_list = theta)
   map_beta   <- mapping_params(mat_list = beta)
   map_psi    <- mapping_params(mat_list = psi)
-  if(isTRUE(nuisance)){map_psi_empty <- mapping_params(mat_list = psi_empty)}
+
+  ifelse(test = isTRUE(nuisance),
+         yes  = map_psi_empty <- mapping_params(mat_list = psi_empty),
+         no   = map_psi_empty <- NULL)
 
   # Put them together in a list to use when unflattening
   maps <- list(
-    lambda = map_lambda,
-    theta  = map_theta,
-    beta   = map_beta,
-    psi    = map_psi,
-    if(isTRUE(nuisance)){psi_empty = map_psi_empty}
+    lambda    = map_lambda,
+    theta     = map_theta,
+    beta      = map_beta,
+    psi       = map_psi,
+    psi_empty = map_psi_empty
   )
+
+  # Add the nuisance argument within the psi map
+  maps$psi$nuisance <- nuisance
 
   # Remove the null entry of psi_empty (when nuisance is FALSE)
   maps <- maps[!sapply(maps, is.null)]
-  browser()
+
   # Now, flatten all the matrices
   flat_lambda <- flatten_params(param_list = lambda, idxs = map_lambda, type = "lambda")
   flat_theta  <- flatten_params(param_list = theta,  idxs = map_theta,  type = "theta")
   flat_beta   <- flatten_params(param_list = beta,   idxs = map_beta,   type = "beta")
-  flat_psi    <- flatten_params(param_list = psi ,   idxs = map_psi,    type = "psi")
-  if(isTRUE(nuisance)){flat_psi_empty <- flatten_params(param_list = psi_empty, idxs = map_psi_empty, type = "psi")}
+  flat_psi    <- flatten_params(param_list = psi,    idxs = map_psi,    type = "psi")
+
+  ifelse(test = isTRUE(nuisance),
+         yes  = flat_psi_empty <- flatten_params(param_list = psi_empty, idxs = map_psi_empty, type = "psi"),
+         no   = flat_psi_empty <- NULL)
 
   # Put them together in a list to use when unflattening
   flats <- list(
-    lambda = flat_lambda,
-    theta  = flat_theta,
-    beta   = flat_beta,
-    psi    = flat_psi,
-    if(isTRUE(nuisance)){psi_empty = flat_psi_empty}
+    lambda    = flat_lambda,
+    theta     = flat_theta,
+    beta      = flat_beta,
+    psi       = flat_psi,
+    psi_empty = flat_psi_empty
   )
 
   # Remove the null entry of psi_empty (when nuisance is FALSE)
@@ -116,13 +125,17 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
   # STEP 2 STANDARD ERRORS #
   ##########################
   # Get step 2 parameters into one single parameter vector (NAIVE standard errors)
-  param_vec_S2 <- c(flat_beta$vec, flat_psi$vec)
+  ifelse(test = isTRUE(nuisance),
+         yes  = param_vec_S2 <- c(flat_beta$vec, flat_psi$vec, flat_psi_empty$vec),
+         no   = param_vec_S2 <- c(flat_beta$vec, flat_psi$vec))
 
   # We need the indices of each type of parameter before we continue (it is to reconstruct the matrices later)
-  vec_ind_S2 <- vector("list", 3)
+  vec_ind_S2 <- vector("list", 5)
   vec_ind_S2[[1]] <- which(param_vec_S2 %in% flat_beta$vec)
   vec_ind_S2[[2]] <- which(param_vec_S2 %in% flat_psi$vec)
   vec_ind_S2[[3]] <- psi_idx # Psi matrix indices for psi_gks
+  vec_ind_S2[[4]] <- which(param_vec_S2 %in% flat_psi_empty$vec)
+  vec_ind_S2[[5]] <- psi_empty_idx # Psi matrix indices for psi_gks
 
   # First, let's compute the NAIVE standard errors
   message("Naive Standard error computation (Step 2 parameters):\n")
@@ -200,15 +213,19 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
   # JOINT STANDARD ERRORTS #
   ##########################
   # Get everything into one single parameter vector
-  param_vec <- c(flat_lambda$vec, flat_theta$vec, flat_beta$vec, flat_psi$vec)
+  ifelse(test = isTRUE(nuisance),
+         yes  = param_vec <- c(flat_lambda$vec, flat_theta$vec, flat_beta$vec, flat_psi$vec, flat_psi_empty$vec),
+         no   = param_vec <- c(flat_lambda$vec, flat_theta$vec, flat_beta$vec, flat_psi$vec))
 
   # We need the indices of each type of parameter before we continue (it is to reconstruct the matrices later)
-  vec_ind <- vector("list", 5)
+  vec_ind <- vector("list", 7)
   vec_ind[[1]] <- which(param_vec %in% flat_lambda$vec)
   vec_ind[[2]] <- which(param_vec %in% flat_theta$vec)
   vec_ind[[3]] <- which(param_vec %in% flat_beta$vec)
   vec_ind[[4]] <- which(param_vec %in% flat_psi$vec)
   vec_ind[[5]] <- psi_idx # Psi matrix indices for psi_gks
+  vec_ind[[6]] <- which(param_vec_S2 %in% flat_psi_empty$vec)
+  vec_ind[[7]] <- psi_empty_idx # Psi matrix indices for psi_gks
 
   # Now, compute the cross-derivatives
   message("Used for the standard error correction (Cross-derivatives):\n")
@@ -395,22 +412,41 @@ obj <- function(x,
                 maps,
                 flats){
 
-  lambda_vec <- x[vec_ind[[1]]]
-  theta_vec  <- x[vec_ind[[2]]]
-  beta_vec   <- x[vec_ind[[3]]]
-  psi_vec    <- x[vec_ind[[4]]]
-  psi_idx    <- vec_ind[[5]]
+  lambda_vec    <- x[vec_ind[[1]]]
+  theta_vec     <- x[vec_ind[[2]]]
+  beta_vec      <- x[vec_ind[[3]]]
+  psi_vec       <- x[vec_ind[[4]]]
+  psi_idx       <- vec_ind[[5]]
+  psi_empty_vec <- x[vec_ind[[6]]]
+  psi_empty_idx <- vec_ind[[7]]
 
   lambda_mat <- unflatten_params(flat = lambda_vec, meta = flats$lambda$meta, idxs = maps$lambda, type = "lambda")
   theta_mat  <- unflatten_params(flat = theta_vec, meta = flats$theta$meta, idxs = maps$theta, type = "theta")
   beta_mat   <- unflatten_params(flat = beta_vec, meta = flats$beta$meta, idxs = maps$beta, type = "beta")
   psi_gs     <- unflatten_params(flat = psi_vec, meta = flats$psi$meta,idxs = maps$psi, type = "psi") # Psi is an special case
 
+  nuisance <- maps$psi$nuisance
+  if(isTRUE(nuisance)){
+    psi_empty <- unflatten_params(flat = psi_empty_vec, meta = flats$psi_empty$meta, idxs = maps$psi_empty, type = "psi") # Psi is an special case
+  }
+
   # Re-input the (possibly) changed psi matrices into the psi_gks matrices.
   # psi_gks is necessary to compute the loglikelihood. However, some parameters (from the empty group-cluster combinations)
   # are treated as nuisance parameters and are fixed.
   for(g in 1:ngroups){
-    psi_mat[[psi_idx[g, 1], psi_idx[g, 2]]] <- psi_gs[[g]]
+    if(isTRUE(nuisance)){
+      # Input the already modified psi_gs for every row in psi_mat (ONLY when nuisance is TRUE)
+      psi_mat[g, ] <- psi_gs[g]
+    } else {
+      # If nuisance is false all the "empty" elements are treated as fixed parameters
+      psi_mat[[psi_idx[g, 1], psi_idx[g, 2]]] <- psi_gs[[g]]
+    }
+  }
+
+  if(isTRUE(nuisance)){
+    for(empty in 1:length(psi_empty)){
+      psi_mat[[psi_empty_idx[empty, 1], psi_empty_idx[empty, 2]]][maps$psi_empty$idx_unconstrained] <- psi_empty[[empty]][maps$psi_empty$idx_unconstrained]
+    }
   }
 
   # compute loglikelihood for all group/cluster combinations
@@ -466,18 +502,37 @@ obj.S2 <- function(x,
                    maps,
                    flats){
 
-  beta_vec   <- x[vec_ind[[1]]]
-  psi_vec    <- x[vec_ind[[2]]]
-  psi_idx    <- vec_ind[[3]]
+  beta_vec      <- x[vec_ind[[1]]]
+  psi_vec       <- x[vec_ind[[2]]]
+  psi_idx       <- vec_ind[[3]]
+  psi_empty_vec <- x[vec_ind[[4]]]
+  psi_empty_idx <- vec_ind[[5]]
 
   beta_mat   <- unflatten_params(flat = beta_vec, meta = flats$beta$meta, idxs = maps$beta, type = "beta")
-  psi_gs     <- unflatten_params(flat = psi_vec, meta = flats$psi$meta,idxs = maps$psi, type = "psi") # Psi is an special case
+  psi_gs     <- unflatten_params(flat = psi_vec, meta = flats$psi$meta, idxs = maps$psi, type = "psi") # Psi is an special case
+
+  nuisance <- maps$psi$nuisance
+  if(isTRUE(nuisance)){
+    psi_empty <- unflatten_params(flat = psi_empty_vec, meta = flats$psi_empty$meta, idxs = maps$psi_empty, type = "psi") # Psi is an special case
+  }
 
   # Re-input the (possibly) changed psi matrices into the psi_gks matrices.
   # psi_gks is necessary to compute the loglikelihood. However, some parameters (from the empty group-cluster combinations)
   # are treated as nuisance parameters and are fixed.
   for(g in 1:ngroups){
-    psi_mat[[psi_idx[g, 1], psi_idx[g, 2]]] <- psi_gs[[g]]
+    if(isTRUE(nuisance)){
+      # Input the already modified psi_gs for every row in psi_mat (ONLY when nuisance is TRUE)
+      psi_mat[g, ] <- psi_gs[g]
+    } else {
+      # If nuisance is false all the "empty" elements are treated as fixed parameters
+      psi_mat[[psi_idx[g, 1], psi_idx[g, 2]]] <- psi_gs[[g]]
+    }
+  }
+
+  if(isTRUE(nuisance)){
+    for(empty in 1:length(psi_empty)){
+      psi_mat[[psi_empty_idx[empty, 1], psi_empty_idx[empty, 2]]][maps$psi_empty$idx_unconstrained] <- psi_empty[[empty]][maps$psi_empty$idx_unconstrained]
+    }
   }
 
   # compute loglikelihood for all group/cluster combinations
