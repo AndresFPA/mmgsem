@@ -12,11 +12,12 @@
 #' @returns SE_vector: List. Includes several vectors that contain the standard errors per type of parameter (beta, psi, etc.)
 #'
 #' @export
-compute_se <- function(object, d = 1e-03, naive = FALSE){
+compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
 
   # ngroups
   ngroups <- length(object$param$lambda)
   nclus   <- (ncol(object$posteriors) - 1)
+  gro_clu <- ngroups * nclus
   MM      <- object$MM
 
   # Prepare the necessary parameter matrices
@@ -40,6 +41,32 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
     psi[[g]] <- psi_gks[[psi_idx[g, 1], psi_idx[g, 2]]]
   }
 
+  # If the user requires the nuisance parameters (theoretically, more correct), include also those parameters.
+  # It may be necessary with complicated models that involve many parameters
+  if(isTRUE(nuisance)){
+    # Which ones are NOT the correct cluster?
+    psi_empty_idx <- which(x = object$modal_post != 1, arr.ind = T)
+
+    # How long must the object be? ngroups*nclus - ngroups (only empty combinations)
+    gk_minus  <- gro_clu - ngroups
+    psi_empty <- vector("list", gk_minus)
+
+    ## Extract the "empty" group-cluster combinations
+    # We also remove the exogenous factors (co)variances.
+    # Those parameters are already included in the regular "psi" object (the non-nuisance one)
+    # Use beta to identify the exogenous variables
+    tmp_beta <- beta[[1]]
+    exog  <- rownames(tmp_beta)[rowSums(tmp_beta) == 0]
+    endog <- !c(rownames(tmp_beta) %in% exog)
+
+    # Proceed to extract the correct object and remove the undesired variances
+    for (gk in 1:gk_minus) {
+      psi_empty[[gk]] <- psi_gks[[psi_empty_idx[gk, 1], psi_empty_idx[gk, 2]]] # Correct object
+      psi_empty[[gk]][exog, exog] <- 0 # Exog variances become 0
+    }
+
+  }
+
   #################################
   ### Flatten all the matrices! ###
   #################################
@@ -48,28 +75,38 @@ compute_se <- function(object, d = 1e-03, naive = FALSE){
   map_theta  <- mapping_params(mat_list = theta)
   map_beta   <- mapping_params(mat_list = beta)
   map_psi    <- mapping_params(mat_list = psi)
+  if(isTRUE(nuisance)){map_psi_empty <- mapping_params(mat_list = psi_empty)}
 
   # Put them together in a list to use when unflattening
   maps <- list(
     lambda = map_lambda,
     theta  = map_theta,
     beta   = map_beta,
-    psi    = map_psi
+    psi    = map_psi,
+    if(isTRUE(nuisance)){psi_empty = map_psi_empty}
   )
 
+  # Remove the null entry of psi_empty (when nuisance is FALSE)
+  maps <- maps[!sapply(maps, is.null)]
+  browser()
   # Now, flatten all the matrices
   flat_lambda <- flatten_params(param_list = lambda, idxs = map_lambda, type = "lambda")
   flat_theta  <- flatten_params(param_list = theta,  idxs = map_theta,  type = "theta")
   flat_beta   <- flatten_params(param_list = beta,   idxs = map_beta,   type = "beta")
   flat_psi    <- flatten_params(param_list = psi ,   idxs = map_psi,    type = "psi")
+  if(isTRUE(nuisance)){flat_psi_empty <- flatten_params(param_list = psi_empty, idxs = map_psi_empty, type = "psi")}
 
   # Put them together in a list to use when unflattening
   flats <- list(
     lambda = flat_lambda,
     theta  = flat_theta,
     beta   = flat_beta,
-    psi    = flat_psi
+    psi    = flat_psi,
+    if(isTRUE(nuisance)){psi_empty = flat_psi_empty}
   )
+
+  # Remove the null entry of psi_empty (when nuisance is FALSE)
+  flats <- flats[!sapply(flats, is.null)]
 
   ##############################
   ### Time to compute the SE ###
