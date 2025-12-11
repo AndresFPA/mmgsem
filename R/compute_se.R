@@ -76,9 +76,11 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
   map_beta   <- mapping_params(mat_list = beta)
   map_psi    <- mapping_params(mat_list = psi)
 
-  ifelse(test = isTRUE(nuisance),
-         yes  = map_psi_empty <- mapping_params(mat_list = psi_empty),
-         no   = map_psi_empty <- NULL)
+  if(isTRUE(nuisance)){
+    map_psi_empty <- mapping_params(mat_list = psi_empty)
+  } else {
+    map_psi_empty <- NULL
+  }
 
   # Put them together in a list to use when unflattening
   maps <- list(
@@ -101,9 +103,11 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
   flat_beta   <- flatten_params(param_list = beta,   idxs = map_beta,   type = "beta")
   flat_psi    <- flatten_params(param_list = psi,    idxs = map_psi,    type = "psi")
 
-  ifelse(test = isTRUE(nuisance),
-         yes  = flat_psi_empty <- flatten_params(param_list = psi_empty, idxs = map_psi_empty, type = "psi"),
-         no   = flat_psi_empty <- NULL)
+  if(isTRUE(nuisance)){
+    flat_psi_empty <- flatten_params(param_list = psi_empty, idxs = map_psi_empty, type = "psi")
+  } else {
+    flat_psi_empty <- NULL
+  }
 
   # Put them together in a list to use when unflattening
   flats <- list(
@@ -224,7 +228,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
   vec_ind[[3]] <- which(param_vec %in% flat_beta$vec)
   vec_ind[[4]] <- which(param_vec %in% flat_psi$vec)
   vec_ind[[5]] <- psi_idx # Psi matrix indices for psi_gks
-  vec_ind[[6]] <- which(param_vec_S2 %in% flat_psi_empty$vec)
+  vec_ind[[6]] <- which(param_vec %in% flat_psi_empty$vec)
   vec_ind[[7]] <- psi_empty_idx # Psi matrix indices for psi_gks
 
   # Now, compute the cross-derivatives
