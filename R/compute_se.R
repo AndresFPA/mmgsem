@@ -251,7 +251,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
   HESS_inv  <- MASS::ginv(-HESS, tol = 1e-06)
   vector_SE <- sqrt(diag(HESS_inv))
   vector_SE <- setNames(vector_SE, colnames(HESS)) # This is done to get the cross-derivatives
-browser()
+
   ##############################
   ### SE Correction ############
   ##############################
@@ -261,7 +261,9 @@ browser()
 
   # Get indices for parameters of both steps from the JOINT Hessian
   step1.idx <- which(colnames(HESS) %in% c(names(flat_lambda$vec), names(flat_theta$vec)))
-  step2.idx <- which(colnames(HESS) %in% c(names(flat_beta$vec), names(flat_psi$vec)))
+  ifelse(test = isTRUE(nuisance),
+         yes  = step2.idx <- which(colnames(HESS) %in% c(names(flat_beta$vec), names(flat_psi$vec), names(flat_psi_empty$vec))),
+         no   = step2.idx <- which(colnames(HESS) %in% c(names(flat_beta$vec), names(flat_psi$vec))))
 
   # Get matrix divided
   I_22 <- HESS[step2.idx, step2.idx]
