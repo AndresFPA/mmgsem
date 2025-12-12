@@ -251,7 +251,7 @@ compute_se <- function(object, d = 1e-03, naive = FALSE, nuisance = FALSE){
   HESS_inv  <- MASS::ginv(-HESS, tol = 1e-06)
   vector_SE <- sqrt(diag(HESS_inv))
   vector_SE <- setNames(vector_SE, colnames(HESS)) # This is done to get the cross-derivatives
-
+browser()
   ##############################
   ### SE Correction ############
   ##############################
