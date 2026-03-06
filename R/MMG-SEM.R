@@ -1,4 +1,4 @@
-#' Mixture Multi-Group Structural Equation Modelling (MMGSEM)
+#' Mixture Multi-Group Structural Equation Modelling (MMGSEM) xxx
 #'
 #' Performs a mixture clustering based on the structural parameters (i.e., regressions) of a SEM model.
 #' The estimation is done in a step-wise fashion and uses an expectation-maximization (EM) algorithm in the second step.
