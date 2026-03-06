@@ -1,4 +1,4 @@
-#' Mixture Multi-Group Structural Equation Modelling (MMGSEM) xxx
+#' Mixture Multi-Group Structural Equation Modelling (MMGSEM)
 #'
 #' Performs a mixture clustering based on the structural parameters (i.e., regressions) of a SEM model.
 #' The estimation is done in a step-wise fashion and uses an expectation-maximization (EM) algorithm in the second step.
@@ -664,7 +664,7 @@ Step1_ML <- function(S1, s1_fit = NULL, centered, group){
                          "\nWITHIN = ", var_mplus[[i]], ";",
                          "\nCLUSTER =", group, ";"),
         DEFINE = paste0("CENTER ", paste(var_mplus[[i]], "(GROUPMEAN);")),
-        ANALYSIS = "TYPE = RANDOM TWOLEVEL;\nESTIMATOR = BAYES;\nITERATIONS = 10000;\nCONVERGENCE = 0.000001;",
+        ANALYSIS = "TYPE = RANDOM TWOLEVEL;\nESTIMATOR = BAYES;\nBITERATIONS = 10000;\nCONVERGENCE = 0.000001;",
         MODEL = S1$mplus_models[[i]],
         SAVEDATA = paste0("\nFILE IS ", paste0("Fscores", i, ".dat"), ";\nSAVE = FSCORES(100 10);\nFORMAT IS FREE;"),
         OUTPUT = "FSCOMPARISON; ",
