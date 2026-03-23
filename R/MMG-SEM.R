@@ -664,7 +664,7 @@ Step1_ML <- function(S1, s1_fit = NULL, centered, group){
                          "\nWITHIN = ", var_mplus[[i]], ";",
                          "\nCLUSTER =", group, ";"),
         DEFINE = paste0("CENTER ", paste(var_mplus[[i]], "(GROUPMEAN);")),
-        ANALYSIS = "TYPE = RANDOM TWOLEVEL;\nESTIMATOR = BAYES;\nBITERATIONS = 10000;\nCONVERGENCE = 0.000001;",
+        ANALYSIS = "TYPE = RANDOM TWOLEVEL;\nESTIMATOR = BAYES;\nBITERATIONS = 10000;\nCONVERGENCE = 0.05;",
         MODEL = S1$mplus_models[[i]],
         SAVEDATA = paste0("\nFILE IS ", paste0("Fscores", i, ".dat"), ";\nSAVE = FSCORES(100 10);\nFORMAT IS FREE;"),
         OUTPUT = "FSCOMPARISON; ",
