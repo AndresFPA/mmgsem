@@ -586,10 +586,19 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
     cov_eta <- vector(mode = "list", length = ngroups)
 
     for (g in 1:ngroups) {
+      # Extract necessary objects
+      lambda_g   <- lambda_gs[[g]]
+      theta_g    <- theta_gs[[g]]
+      marker.idx <- lavaan:::lav_utils_get_marker(lambda_g)
+
       # Compute the M (mapping) matrix in case we have different blocks
-      lambda_g <- lambda_gs[[g]]
-      theta_g  <- theta_gs[[g]]
-      M_mat[[g]] <- solve(t(lambda_g) %*% solve(theta_g) %*% lambda_g) %*% t(lambda_g) %*% solve(theta_g)
+      # If theta has a 0 in the diagonal, the t-transformation must be use to compute the M matrix
+      if(any(diag(theta_g) == 0)){
+        tmat <- sam_tmat(lambda = lambda_g, theta = theta_g)
+        M_mat[[g]] <- tmat[marker.idx, , drop = FALSE]
+      } else {
+        M_mat[[g]] <- solve(t(lambda_g) %*% solve(theta_g) %*% lambda_g) %*% t(lambda_g) %*% solve(theta_g)
+      }
 
       # Get the covariance of the factors (cov_eta)
       # First, get biased sample covariance matrix per group (S)
