@@ -596,6 +596,10 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
       if(any(diag(theta_g) == 0)){
         tmat <- sam_tmat(lambda = lambda_g, theta = theta_g)
         M_mat[[g]] <- tmat[marker.idx, , drop = FALSE]
+
+        # Add correct row and column names for later use in lavaan
+        rownames(M_mat[[g]]) <- colnames(lambda_g)
+        colnames(M_mat[[g]]) <- colnames(theta_g)
       } else {
         M_mat[[g]] <- solve(t(lambda_g) %*% solve(theta_g) %*% lambda_g) %*% t(lambda_g) %*% solve(theta_g)
       }
