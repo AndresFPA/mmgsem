@@ -6,7 +6,7 @@
 #' @param se Must be the resulting object from the se() function of the mmgsem package. If included, the summary function will return the hypothesis testing of the relevant parameters (regressions).
 #' @method summary mmgsem
 #' @export
-summary.mmgsem <- function(model, se = NULL, model_selection = F) {
+summary.mmgsem <- function(model, se = NULL, model_selection = F, logL = "observed") {
   if (!is.list(model)) {
     stop("Input must be a list, likely the output of MMGSEM() or ModelSelection().")
   }
@@ -169,26 +169,49 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F) {
     Overview <- model$Overview
     lower_limit <- Overview$Clusters[1]
     upper_limit <- Overview$Clusters[length(Overview$Clusters)]
-    cat("\nModel Selection Summary for Mixture Multi-Group Structural Equation Modelling (MMGSEM)\n")
-    cat("---------------------------------------------------------------------\n")
-    cat("MMG-SEM models from", lower_limit, "to", upper_limit, "clusters were run.\n")
-    cat("-----------------------------------------\n")
-    cat("Convex Hull selected the model with", which.max(Overview$Chull), "clusters\n")
-    cat("BIC_G selected the model with      ", which.min(Overview$BIC_G), "clusters\n")
-    cat("BIC_N selected the model with      ", which.min(Overview$BIC_N), "clusters\n")
-    cat("AIC selected the model with        ", which.min(Overview$AIC), "clusters\n")
-    cat("AIC3 selected the model with       ", which.min(Overview$AIC3), "clusters\n")
-    cat("ICL selected the model with        ", which.min(Overview$ICL), "clusters\n")
-    cat("\n")
+    if (logL == "observed"){
+      cat("\nModel Selection Summary for Mixture Multi-Group Structural Equation Modelling (MMGSEM)\n")
+      cat("---------------------------------------------------------------------\n")
+      cat("MMG-SEM models from", lower_limit, "to", upper_limit, "clusters were run.\n")
+      cat("-----------------------------------------\n")
+      cat("Convex Hull selected the model with", which.max(Overview$Chull), "clusters\n")
+      cat("BIC_G selected the model with      ", which.min(Overview$BIC_G), "clusters\n")
+      cat("BIC_N selected the model with      ", which.min(Overview$BIC_N), "clusters\n")
+      cat("AIC selected the model with        ", which.min(Overview$AIC), "clusters\n")
+      cat("AIC3 selected the model with       ", which.min(Overview$AIC3), "clusters\n")
+      cat("ICL selected the model with        ", which.min(Overview$ICL), "clusters\n")
+      cat("\n")
 
-    # Prepare the overview matrix for printing
-    Overview <- round(Overview, 3)
-    Overview[is.na(Overview)] <- "--"
-    idx <- which(colnames(Overview) == "ICL")
-    print(Overview[, 1:idx])
+      # Prepare the overview matrix for printing
+      Overview <- round(Overview, 3)
+      Overview[is.na(Overview)] <- "--"
+      idx <- which(colnames(Overview) == "ICL")
+      print(Overview[, 1:idx])
 
-    cat("\n")
-    cat("To check the plots of each model selection measure, please use the plot_mmgsem() function\n")
+      cat("\n")
+      cat("To check the plots of each model selection measure, please use the plot() function\n")
+    } else if (logL == "factors") {
+      cat("\nModel Selection Summary for Mixture Multi-Group Structural Equation Modelling (MMGSEM)\n")
+      cat("---------------------------------------------------------------------\n")
+      cat("MMG-SEM models from", lower_limit, "to", upper_limit, "clusters were run.\n")
+      cat("-----------------------------------------\n")
+      cat("Convex Hull selected the model with", which.max(Overview$Chull_fac), "clusters\n")
+      cat("BIC_G selected the model with      ", which.min(Overview$BIC_G_fac), "clusters\n")
+      cat("BIC_N selected the model with      ", which.min(Overview$BIC_N_fac), "clusters\n")
+      cat("AIC selected the model with        ", which.min(Overview$AIC_fac), "clusters\n")
+      cat("AIC3 selected the model with       ", which.min(Overview$AIC3_fac), "clusters\n")
+      cat("ICL selected the model with        ", which.min(Overview$ICL_fac), "clusters\n")
+      cat("\n")
+
+      # Prepare the overview matrix for printing
+      Overview <- round(Overview, 3)
+      Overview[is.na(Overview)] <- "--"
+      idx.start <- which(colnames(Overview) == "LL_fac")
+      idx.final <- ncol(Overview)
+      print(Overview[, c(1,2,idx.start:idx.final)])
+
+      cat("\n")
+      cat("To check the plots of each model selection measure, please use the plot() function\n")
+    }
   }
-
 }
