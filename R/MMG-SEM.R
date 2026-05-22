@@ -2118,7 +2118,7 @@ Step2_slow <- function(ngroups             = ngroups,
     # Re-order betas
     if (nclus == 1) {
       beta_ks <- beta_ks[[1]]
-      beta_ks <- reorder(beta_ks)
+      beta_ks <- reorder(beta_ks, exog = exog, endog = endog)
     } else if (nclus != 1) {
       beta_ks <- lapply(1:nclus, function(x) {
         reorder(x = beta_ks[[x]], exog = exog, endog = endog)
