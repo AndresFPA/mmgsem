@@ -430,7 +430,7 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
     Modal_posteriors <- t(apply(post_no_group, 1, function(x) as.numeric(x == max(x))))
   }
   Modal_posteriors <- as.data.frame(Modal_posteriors)
-
+  # browser()
   # Extract relevant psi_gks
   psi_idx <- which(x = Modal_posteriors == 1, arr.ind = T) # array indices of the relevant group-cluster combinations
 
