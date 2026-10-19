@@ -4,7 +4,7 @@
 \alias{compute_se}
 \title{Standard Errors (SE) wrapper for MMGSEM}
 \usage{
-se(object, d = 1e-03, naive = FALSE)
+compute_se(object, d = 1e-03, naive = FALSE, nuisance = FALSE)
 }
 \arguments{
 \item{object}{A fitted model returned by the mmgsem function.}
@@ -12,6 +12,8 @@ se(object, d = 1e-03, naive = FALSE)
 \item{d}{Step size for numerical approximation of the derivative. Default is 1e-03.}
 
 \item{naive}{Logical. If TRUE, returns uncorrected SEs (faster but less accurate). If FALSE (default), applies the correction for step-wise estimation.}
+
+\item{nuisance}{Logical. If TRUE, includes nuisance parameters (parameters from empty group-cluster combinations). Default is FALSE.}
 }
 \value{
 SE_vector: List. Includes several vectors that contain the standard errors per type of parameter (beta, psi, etc.)

@@ -3,11 +3,12 @@
 #' @description
 #' A wrapper to compute the SE of a fitted object by mmgsem(). It obtains the SE by numerically computing the second derivative of the loglikelihood function.
 #'
-#' @usage se(object, d = 1e-03, naive = FALSE)
+#' @usage compute_se(object, d = 1e-03, naive = FALSE, nuisance = FALSE)
 #'
 #' @param object A fitted model returned by the mmgsem function.
 #' @param d Step size for numerical approximation of the derivative. Default is 1e-03.
 #' @param naive Logical. If TRUE, returns uncorrected SEs (faster but less accurate). If FALSE (default), applies the correction for step-wise estimation.
+#' @param nuisance Logical. If TRUE, includes nuisance parameters (parameters from empty group-cluster combinations). Default is FALSE.
 #'
 #' @returns SE_vector: List. Includes several vectors that contain the standard errors per type of parameter (beta, psi, etc.)
 #'
