@@ -4,6 +4,8 @@
 #'
 #' @param model Resulting object from a mmgsem model (must be a list). It can also be the resulting object from the ModelSelection() function.
 #' @param se Must be the resulting object from the compute_se() function of the mmgsem package. If included, the summary function will return the hypothesis testing of the relevant parameters (regressions).
+#' @param model_selection Logical. If TRUE, the summary function will return the model selection results of the ModelSelection() function.
+#' @param logL Character. If model_selection = TRUE, the user can choose whether to display the model selection results based on the observed loglikelihood ("observed") or the factors' loglikelihood ("factors"). Default is "observed".
 #' @method summary mmgsem
 #' @export
 summary.mmgsem <- function(model, se = NULL, model_selection = F, logL = "observed") {
@@ -69,15 +71,16 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F, logL = "observ
     # cat("Entropy R²: ", entropy, "\n")
 
     # Display regression coefficients per cluster
+    # First convert the beta_ks to a list if k = 1, to avoid errors in the for loop
+    if (!is.list(beta_ks)) {
+      beta_ks <- list(beta_ks)
+    }
+
     cat("\nRegression Coefficients:\n")
     for (k in seq_along(beta_ks)) {
       # Prepare the output
       # Convert matrix to a more suitable data frame
-      if (is.list(beta_ks)) {
-        beta_df <- as.data.frame(as.table(model$param$beta_ks[[k]]))
-      } else { # Which means we only have one cluster
-        beta_df <- as.data.frame(as.table(model$param$beta_ks))
-      }
+      beta_df <- as.data.frame(as.table(beta_ks[[k]]))
 
       # Rename columns
       colnames(beta_df) <- c("Response", "Predictor", "estimate")
@@ -151,16 +154,21 @@ summary.mmgsem <- function(model, se = NULL, model_selection = F, logL = "observ
 
     # Print the (modal) clustering results. Posterior matrix is avoided due to possible large results
     cat("\nClustering results:\n")
-    # Transform soft clustering to hard clustering
-    post_no_group <- posteriors[, 2:ncol(posteriors)]
-    Modal_posteriors <- t(apply(post_no_group, 1, function(x) as.numeric(x == max(x))))
-    Modal_posteriors <- as.data.frame(Modal_posteriors)
-    Modal_posteriors$Group <- posteriors$Group
+    # Extract modal posteriors from the model output
+    Modal_posteriors <- model$modal_post
 
-    for(k in 1:(ncol(posteriors)-1)){
+    # Deprecated
+    # Modal posteriors are now obtained directly from the model output, so no need to compute them here.
+    # Transform soft clustering to hard clustering
+    # post_no_group <- posteriors[, 2:ncol(posteriors)]
+    # Modal_posteriors <- t(apply(post_no_group, 1, function(x) as.numeric(x == max(x))))
+    # Modal_posteriors <- as.data.frame(Modal_posteriors)
+    # Modal_posteriors$Group <- posteriors$Group
+
+    for(k in 2:(ncol(posteriors))){
       # browser()
       members_k <- Modal_posteriors$Group[Modal_posteriors[, k] == 1]
-      cat("\nCluster ", k, ":\n", sep = "")
+      cat("\nCluster ", k-1, ":\n", sep = "")
       cat(members_k)
     }
     cat("\n")

@@ -412,7 +412,10 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
     }) # Does not work with only one cluster
   }
 
-  names(beta_ks) <- paste("Cluster", seq_len(nclus))
+  # Name the list elements of the final beta_ks with cluster names
+  if(nclus != 1){
+    names(beta_ks) <- paste("Cluster", seq_len(nclus))
+  } 
 
   # Add the group name to the posterior matrix
   z_gks       <- as.data.frame(z_gks)
@@ -430,9 +433,14 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
     Modal_posteriors <- t(apply(post_no_group, 1, function(x) as.numeric(x == max(x))))
   }
   Modal_posteriors <- as.data.frame(Modal_posteriors)
-  # browser()
+  
   # Extract relevant psi_gks
   psi_idx <- which(x = Modal_posteriors == 1, arr.ind = T) # array indices of the relevant group-cluster combinations
+  
+  # Re-construct correct modal posterior matrix
+  Modal_posteriors$Group <- g_name
+  g_col_idx              <- ncol(Modal_posteriors)
+  Modal_posteriors       <- Modal_posteriors[,c(g_col_idx, 1:(g_col_idx-1))] # Reorder with Group column as the first column
 
   # Reorder based on group number insted of column number
   correct_idx <- order(psi_idx[,1])
