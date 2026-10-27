@@ -8,6 +8,9 @@ library("devtools")
 devtools::install_github("AndresFPA/mmgsem")
 ```
 
+# Tutorial
+A tutorial on how to use this package has been published in _Structural Equation Modeling: A Multidisciplinary Journal_, please see: [Using Mixture Multigroup Structural Equation Modeling to Compare Structural Relations Across Many Groups: An Introduction to the mmgsem R Package](https://doi.org/10.1080/10705511.2026.2617170). An accompanying R script for the tutorial can also be found in this complementary [GitHub Repository](https://github.com/AndresFPA/Tutorial-mmgsem).
+
 # Functions
 + **MMG-SEM**: The main function is to perform the clustering based on the structural parameters.
 + **ModelSelection**: Wrapper function. It performs MMG-SEM as many times as the user requires with different numbers of clusters, returning model selection measures.
