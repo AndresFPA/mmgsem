@@ -4,7 +4,8 @@
 \alias{compute_se}
 \title{Standard Errors (SE) wrapper for MMGSEM}
 \usage{
-compute_se(object, d = 1e-03, naive = FALSE, nuisance = FALSE)
+compute_se(object, d = 1e-03, naive = FALSE, nuisance = FALSE,
+  hessian_tol = 1e-05)
 }
 \arguments{
 \item{object}{A fitted model returned by the mmgsem function.}
@@ -14,6 +15,8 @@ compute_se(object, d = 1e-03, naive = FALSE, nuisance = FALSE)
 \item{naive}{Logical. If TRUE, returns uncorrected SEs (faster but less accurate). If FALSE (default), applies the correction for step-wise estimation.}
 
 \item{nuisance}{Logical. If TRUE, includes nuisance parameters (parameters from empty group-cluster combinations). Default is FALSE.}
+
+\item{hessian_tol}{Relative tolerance for the generalized inverse of the Hessians. Singular values at or below this fraction of the largest are excluded. Must be between 0 and 1; the default is 1e-05.}
 }
 \value{
 SE_vector: List. Includes several vectors that contain the standard errors per type of parameter (beta, psi, etc.)
