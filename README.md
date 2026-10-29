@@ -2,8 +2,6 @@
 
 [![R-CMD-check](https://github.com/AndresFPA/mmgsem/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/AndresFPA/mmgsem/actions/workflows/R-CMD-check.yaml)
 
-[Package website](https://andresfpa.github.io/mmgsem/)
-
 R code for Mixture Multigroup SEM (MMG-SEM). MMG-SEM performs clustering of a SEM model based on the structural parameters while allowing for a combination of group-specific and invariant parameters in the measurement model. For more information (and citation) about the method, please see: [Mixture Multigroup Structural Equation Modeling: A Novel Method for Comparing Structural Relations Across Many Groups](https://doi.org/10.1037/met0000667)
 
 ## Installation
