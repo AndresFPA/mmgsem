@@ -5,8 +5,9 @@ Authors@R:
     person("Andres Felipe", "Perez Alonso", , "a.f.perezalonso@tilburguniversity.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-2480-8771"))
 Description: Package for finding clusters of groups that share similar relations between latent variables (i.e., regression parameters) through the use of MMG-SEM.
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+License: MIT + file LICENSE
+URL: https://andresfpa.github.io/mmgsem/, https://github.com/AndresFPA/mmgsem
+BugReports: https://github.com/AndresFPA/mmgsem/issues
 Imports:
 	lavaan,
 	ggplot2,
