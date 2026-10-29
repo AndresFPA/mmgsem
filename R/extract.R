@@ -3,8 +3,6 @@
 #' @description
 #' Function used to extract an specific model out of a Model Selection (mmgsem) fitted object.
 #'
-#' @usage extract(object)
-#'
 #' @param object A resulting fitted object from the ModelSelection function.
 #' @param nclus The number of clusters of the desired model
 #'

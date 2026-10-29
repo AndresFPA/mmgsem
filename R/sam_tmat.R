@@ -9,7 +9,7 @@ sam_tmat <- function(lambda, theta){
   nfac <- ncol(lambda)
 
   # Extract marker variable indices
-  marker.idx <- lavaan:::lav_utils_get_marker(lambda)
+  marker.idx <- lavaan_marker_indices(lambda)
 
   # Get C matrix
   C2 <- diag(nvar)

@@ -11,7 +11,11 @@ BugReports: https://github.com/AndresFPA/mmgsem/issues
 Imports:
 	lavaan,
 	ggplot2,
-	semTools
+	semTools,
+	MASS
+Suggests:
+    blavaan,
+    MplusAutomation
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2

@@ -10,6 +10,8 @@ test.mmgsem(model, se, multiple_comparison = FALSE)
 \item{model}{Resulting object from a mmgsem model (must be a list). It can also be the resulting object from the ModelSelection() function.}
 
 \item{se}{Must be the resulting object from the compute_se() function of the mmgsem package. If included, the summary function will return the hypothesis testing of the relevant parameters (regressions).}
+
+\item{multiple_comparison}{Logical. If TRUE, adjusts p-values for multiple comparisons.}
 }
 \description{
 Summarizes the most important information of the results from a MMG-SEM model

@@ -61,6 +61,8 @@ Example for 6 groups and 2 clusters:
 
 \item{nstarts}{Number of random starts for Step 2 (default = 20)..}
 
+\item{printing}{Logical. If TRUE, prints progress messages during estimation.}
+
 \item{partition}{Initialisation partition for random starts: "hard" (default) or "soft".}
 
 \item{endogenous_cov}{Logical. If TRUE (default), residual covariances among purely endogenous latent variables are estimated. If FALSE, they are fixed to 0 and only the residual variances are estimated.}
@@ -76,11 +78,11 @@ constraints with ordinal data (by default) are handled by standardizing the fact
 The rescaling argument (either T or F) rescales the factor variances and loadings to the marker variable scaling
 before running step 2. It is set to T by default (rescaling happens). If set to F, the factor variances are kept fixed to 1.}
 
+\item{only_slow}{Logical. If TRUE, uses the slower Step 2 estimation implementation.}
+
 \item{...}{MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
 and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables,
 group.equal for constraints, group.partial for non-invariances, etc.}
-
-\item{ordinal}{Logical. If TRUE, observed variables are treated as ordinal (default = FALSE)}
 }
 \value{
 Overview: Matrix. It contains the results of all the model selection measures for each model.

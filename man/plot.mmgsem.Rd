@@ -4,10 +4,14 @@
 \alias{plot.mmgsem}
 \title{Plot model selection results}
 \usage{
-\method{plot}{mmgsem}(ModelSel, criteria)
+\method{plot}{mmgsem}(x, criteria = NULL, ...)
 }
 \arguments{
-\item{ModelSel}{Object returned from the ModelSel() function.}
+\item{x}{Object returned from the ModelSelection() function.}
+
+\item{criteria}{Optional name of a model selection criterion to plot. If NULL, returns all available plots.}
+
+\item{...}{Not used.}
 }
 \value{
 plots List that contains the plots for all the model selection measures.

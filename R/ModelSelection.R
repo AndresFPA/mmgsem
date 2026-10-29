@@ -25,6 +25,7 @@
 #' @param s1_fit Optional. A fitted model object for Step 1. Can be from lavaan (CFA), blavaan (BCFA), or MplusAutomation (ML-CFA).
 #' @param max_it Maximum number of iterations for Step 2 (default = 10000).
 #' @param nstarts Number of random starts for Step 2 (default = 20)..
+#' @param printing Logical. If TRUE, prints progress messages during estimation.
 #' @param partition Initialisation partition for random starts: "hard" (default) or "soft".
 #' @param endogenous_cov Logical. If TRUE (default), residual covariances among purely endogenous latent variables are estimated. If FALSE, they are fixed to 0 and only the residual variances are estimated.
 #' @param endo_group_specific Logical. If TRUE (default), residual covariances are group- and cluster-specific (i.e., they are estimated for every group-cluster combination). If FALSE, they are cluster-specific (i.e., they are fixed to be equal across groups within a cluster). Note that, if FALSE, the residual covariances will also influence the clustering.
@@ -34,7 +35,7 @@
 #'                  The rescaling argument (either T or F) rescales the factor variances and loadings to the marker variable scaling
 #'                  before running step 2. It is set to T by default (rescaling happens). If set to F, the factor variances are kept fixed to 1.
 #' @param meanstr Logical. If TRUE, includes the mean structure in the model (e.g., for scalar invariance).
-#' @param ordinal Logical. If TRUE, observed variables are treated as ordinal (default = FALSE)
+#' @param only_slow Logical. If TRUE, uses the slower Step 2 estimation implementation.
 #' @param ... MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
 #'            and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables,
 #'            group.equal for constraints, group.partial for non-invariances, etc.
@@ -229,7 +230,6 @@ CHull <- function(loglik, nrpar, nsclust){
     fitMat <- cbind(fitMat, abs(screeratios))
     return(fitMat)
 }
-
 
 
 

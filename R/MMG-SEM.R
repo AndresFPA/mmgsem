@@ -25,6 +25,7 @@
 #' @param s1_fit Optional. A fitted model object for Step 1. Can be from lavaan (CFA), blavaan (BCFA), or MplusAutomation (ML-CFA).
 #' @param max_it Maximum number of iterations for Step 2 (default = 10000).
 #' @param nstarts Number of random starts for Step 2 (default = 20)..
+#' @param printing Logical. If TRUE, prints progress messages during estimation.
 #' @param partition Initialisation partition for random starts: "hard" (default) or "soft".
 #' @param endogenous_cov Logical. If TRUE (default), residual covariances among purely endogenous latent variables are estimated. If FALSE, they are fixed to 0 and only the residual variances are estimated.
 #' @param endo_group_specific Logical. If TRUE (default), residual covariances are group- and cluster-specific (i.e., they are estimated for every group-cluster combination). If FALSE, they are cluster-specific (i.e., they are fixed to be equal across groups within a cluster). Note that, if FALSE, the residual covariances will also influence the clustering.
@@ -34,7 +35,7 @@
 #'                  The rescaling argument (either T or F) rescales the factor variances and loadings to the marker variable scaling
 #'                  before running step 2. It is set to T by default (rescaling happens). If set to F, the factor variances are kept fixed to 1.
 #' @param meanstr Logical. If TRUE, includes the mean structure in the model (e.g., for scalar invariance).
-#' @param ordinal Logical. If TRUE, observed variables are treated as ordinal (default = FALSE)
+#' @param only_slow Logical. If TRUE, uses the slower Step 2 estimation implementation.
 #' @param ... MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
 #'            and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables,
 #'            group.equal for constraints, group.partial for non-invariances, etc.
@@ -272,7 +273,7 @@ mmgsem <- function(dat, S1 = NULL, S2 = NULL, s1_type = "lavaan",
       Sigma_gks[[g, k]] <- lambda_gs[[g]] %*% var_eta %*% t(lambda_gs[[g]]) + theta_gs[[g]]
       # Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]]))
       # Sigma[[g, k]][lower.tri(Sigma[[g, k]])] <- t(Sigma[[g, k]])[lower.tri(Sigma[[g, k]])]
-      Obs.loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+      Obs.loglik_gk <- lavaan_loglik_samplestats(
         sample.mean = rep(0, length(vars)),
         sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
         # sample.nobs = N_gks[g, k],
@@ -597,7 +598,7 @@ Step1 <- function(S1 = S1, s1_fit = s1_fit, centered = centered,
       # Extract necessary objects
       lambda_g   <- lambda_gs[[g]]
       theta_g    <- theta_gs[[g]]
-      marker.idx <- lavaan:::lav_utils_get_marker(lambda_g)
+      marker.idx <- lavaan_marker_indices(lambda_g)
 
       # Compute the M (mapping) matrix in case we have different blocks
       # If theta has a 0 in the diagonal, the t-transformation must be use to compute the M matrix
@@ -679,7 +680,7 @@ Step1_ML <- function(S1, s1_fit = NULL, centered, group){
   for (i in 1:M) {
     if(is.null(s1_fit[[i]])){
       # Define Mplus model
-      mod <- mplusObject(
+      mod <- MplusAutomation::mplusObject(
         TITLE = "Multilevel CFA;",
         VARIABLE = paste("USEVARIABLES =", group, var_mplus[[i]], ";",
                          "\nWITHIN = ", var_mplus[[i]], ";",
@@ -692,7 +693,7 @@ Step1_ML <- function(S1, s1_fit = NULL, centered, group){
         rdata = centered)
 
       # Run Mplus model and store results
-      res_temp[[i]] <- mplusModeler(mod, modelout = paste0("cfa", i, ".inp"), run = 1L)
+      res_temp[[i]] <- MplusAutomation::mplusModeler(mod, modelout = paste0("cfa", i, ".inp"), run = 1L)
       s1_fit[[i]] <- res_temp[[i]][["results"]]
     }
 
@@ -833,11 +834,11 @@ Step1_BSEM <- function(S1, s1_fit = bfit_MM, centered, group,
 
   extract_results <- function(fit) {
     list(
-      est      = blavInspect(fit, "est", add.class = FALSE, add.labels = TRUE), #parameters
-      lvs      = blavInspect(fit, "lvs"),
-      lvmeans  = blavInspect(fit, "lvmeans"), #mean factor scores
+      est      = blavaan::blavInspect(fit, "est", add.class = FALSE, add.labels = TRUE), #parameters
+      lvs      = blavaan::blavInspect(fit, "lvs"),
+      lvmeans  = blavaan::blavInspect(fit, "lvmeans"), #mean factor scores
       fit      = fitMeasures(fit), #model fit
-      psrf     = blavInspect(fit, "psrf") #convergence
+      psrf     = blavaan::blavInspect(fit, "psrf") #convergence
     )
   }
 
@@ -1651,7 +1652,7 @@ Step2_fast <- function(ngroups             = ngroups,
           Sigma[[g, k]] <- 0.5 * (Sigma[[g, k]] + t(Sigma[[g, k]])) # Force to be symmetric
 
           # Estimate the loglikelihood
-          loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          loglik_gk <- lavaan_loglik_samplestats(
             sample.mean = rep(0, nrow(cov_eta[[1]])),
             sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
             # sample.nobs = N_gks[g, k],
@@ -2087,7 +2088,7 @@ Step2_slow <- function(ngroups             = ngroups,
     for (k in 1:nclus) {
       for (g in 1:ngroups) {
         gk <- gk + 1L
-        loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+        loglik_gk <- lavaan_loglik_samplestats(
           sample.mean = s2out@SampleStats@mean[[gk]],
           sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
           sample.cov  = s2out@SampleStats@cov[[gk]],
@@ -2252,7 +2253,7 @@ Step2_slow <- function(ngroups             = ngroups,
       for (k in 1:nclus) {
         for (g in 1:ngroups) {
           gk <- gk + 1L
-          loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          loglik_gk <- lavaan_loglik_samplestats(
             sample.mean = s2out@SampleStats@mean[[gk]],
             sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
             sample.cov  = s2out@SampleStats@cov[[gk]],
@@ -2637,7 +2638,7 @@ global_sam <- function(){
         for (g in 1:ngroups) {
           # browser()
           gk <- gk + 1L
-          global_loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+          global_loglik_gk <- lavaan_loglik_samplestats(
             sample.mean = rep(0, length(vars)), # s2out@SampleStats@mean[[gk]],
             sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
             sample.cov  = S_biased[[g]], # s2out@SampleStats@cov[[gk]],
@@ -2772,7 +2773,4 @@ EStep <- function(pi_ks, ngroup, nclus, loglik){
 
   return(z_gks)
 }
-
-
-
 

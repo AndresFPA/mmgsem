@@ -4,7 +4,7 @@
 \alias{extract}
 \title{Model extraction function for MMGSEM}
 \usage{
-extract(object)
+extract(object, nclus)
 }
 \arguments{
 \item{object}{A resulting fitted object from the ModelSelection function.}

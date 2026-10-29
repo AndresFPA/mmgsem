@@ -3,16 +3,19 @@
 #' Plots the graphs often used to determine the optimal number of clusters (e.g., scree plots). Provides plots for all the model selection measures
 #'
 #' INPUT: Arguments required by the function
-#' @param ModelSel Object returned from the ModelSel() function.
+#' @param x Object returned from the ModelSelection() function.
+#' @param criteria Optional name of a model selection criterion to plot. If NULL, returns all available plots.
+#' @param ... Not used.
 #'
 #' @return plots List that contains the plots for all the model selection measures.
 #'
+#' @method plot mmgsem
 #' @export
-plot.mmgsem <- function(ModelSel, criteria){
-  if (!is.list(ModelSel)) {
+plot.mmgsem <- function(x, criteria = NULL, ...){
+  if (!is.list(x)) {
     stop("Input must be a list, likely the output of ModelSelection().")
   }
-  overview <- ModelSel$Overview
+  overview <- x$Overview
 
   # Plots for visual inspection
   plot.BIC_G     <- ggplot2::ggplot(data = overview, mapping = ggplot2::aes(x = Clusters, y = BIC_G))     + ggplot2::geom_point() + ggplot2::geom_line() # plot(x = overview$Clusters, y = overview$BIC_G); lines(x = overview$Clusters, y = overview$BIC_G)

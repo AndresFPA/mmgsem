@@ -555,7 +555,7 @@ obj <- function(x,
       S_biased <- S[[g]]
 
       # Estimate the loglikelihood
-      loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+      loglik_gk <- lavaan_loglik_samplestats(
         sample.mean = rep(0, nrow(theta_mat[[1]])),
         sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
         sample.cov  = S_biased, # Factor covariance matrix from step 1
@@ -638,7 +638,7 @@ obj.S2 <- function(x,
       Sigma[[g, k]] <- solve(I - beta_mat[[k]]) %*% psi_mat[[g, k]] %*% t(solve(I - beta_mat[[k]]))
 
       # Estimate the loglikelihood
-      loglik_gk <- lavaan:::lav_mvnorm_loglik_samplestats(
+      loglik_gk <- lavaan_loglik_samplestats(
         sample.mean = rep(0, nrow(beta_mat[[1]])),
         sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
         sample.cov  = S[[g]], # Factor covariance matrix from step 1
@@ -689,7 +689,7 @@ obj.S1 <- function(x,
     Sigma[[g]] <- lambda_mat[[g]] %*% psi_mat[[g]] %*% t(lambda_mat[[g]]) + theta_mat[[g]]
 
     # Estimate the loglikelihood
-    loglik_g <- lavaan:::lav_mvnorm_loglik_samplestats(
+    loglik_g <- lavaan_loglik_samplestats(
       sample.mean = rep(0, nrow(theta_mat[[1]])),
       sample.nobs = N_gs[g], # Use original sample size to get the correct loglikelihood
       sample.cov  = S[[g]], # Factor covariance matrix from step 1
