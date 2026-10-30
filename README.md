@@ -1,4 +1,4 @@
-![MMG-SEM package banner](man/figures/banner_github.jpg)
+<img src="man/figures/banner_github.jpg" alt="" />
 
 [![R-CMD-check](https://github.com/AndresFPA/mmgsem/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/AndresFPA/mmgsem/actions/workflows/R-CMD-check.yaml)
 [![pkgdown](https://github.com/AndresFPA/mmgsem/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/AndresFPA/mmgsem/actions/workflows/pkgdown.yaml)
@@ -98,7 +98,9 @@ summary(selected_fit, se = standard_errors)
 
 ## Longitudinal extension
 
-For repeated measurements of the same groups, `lmmgsem()` combines stepwise measurement-invariance analysis with a hidden Markov model. Provide a data frame with group and time identifiers, plus measurement (`S1`) and structural (`S2`) model syntax. Every group must have data at each of at least two time points.
+For multi-wave data of the same groups, `lmmgsem()` extends MMG-SEM with a Latent Markov model in the second step of the estimation (*Note: Every group must have data at each of at least two time points*). We provide an experimental function to test and identify for measurement invariance across groups and time points. However, the function is still in development and its results must interpreted with caution. 
+
+By providing a data frame with group and time variables, plus measurement (`S1`) and structural (`S2`) model syntax, the measuement model can be estimated as: 
 
 ```R
 mi_results <- mmgsem::compute_mi_long_stepwise_score(
@@ -110,7 +112,11 @@ mi_results <- mmgsem::compute_mi_long_stepwise_score(
   specific_noninv = FALSE
 )
 s1_fit <- mi_results$final_fit
+```
 
+Which will return a lavaan object for a MG-CFA where every group-time combination is treated as an independent group. The user can, of course, run their own analysis using lavaan. You can pass a lavaan model directly through `s1_fit`; it must be a multigroup measurement model. If `s1_fit` is omitted, the measurement-invariance fit is computed automatically:
+
+```R
 lmmgsem_fit <- mmgsem::lmmgsem(
   dat = longitudinal_data,
   S1 = S1_model,
@@ -125,7 +131,7 @@ lmmgsem_fit <- mmgsem::lmmgsem(
 summary(lmmgsem_fit)
 ```
 
-You can pass a lavaan model directly through `s1_fit`; it must be a multigroup measurement model with one group per group-time cell. If `s1_fit` is omitted, the measurement-invariance fit is computed automatically. For cluster-count selection, `ModelSelection()` accepts the same longitudinal arguments and reuses the lavaan measurement model across candidate models:
+For cluster-count selection, `ModelSelection()` accepts the same longitudinal arguments and reuses the lavaan measurement model across candidate models:
 
 ```R
 longitudinal_selection <- mmgsem::ModelSelection(
@@ -142,11 +148,11 @@ summary(longitudinal_selection, model_selection = TRUE)
 selected_longitudinal_fit <- mmgsem::extract(longitudinal_selection, nclus = 4)
 ```
 
-The HMM returns posterior state probabilities for each group and time point, initial state probabilities, and the state-transition matrix. Its information criteria use the sequence-level factor likelihood and marginal state entropy; the observed and factor likelihood fields are equal because no separate indicator-level likelihood is calculated. Standard errors for `lmmgsem()` are not currently implemented.
+The Latent Markov Model returns posterior state probabilities for each group and time point, initial state probabilities, and the state-transition matrix. Its information criteria use the factor likelihood; the observed and factor likelihood fields are equal because no separate indicator-level likelihood is calculated. Standard errors for `lmmgsem()` are not currently implemented.
 
 ## Tutorial
 
-An in-depth tutorial on how to use this package has been published in _Structural Equation Modeling: A Multidisciplinary Journal_, please see: [Using Mixture Multigroup Structural Equation Modeling to Compare Structural Relations Across Many Groups: An Introduction to the mmgsem R Package](https://doi.org/10.1080/10705511.2026.2617170). An accompanying R script for the tutorial can also be found in this complementary [GitHub Repository](https://github.com/AndresFPA/Tutorial-mmgsem).
+An in-depth tutorial on how to use this package has been published in _Structural Equation Modeling: A Multidisciplinary Journal_, please see: [Using Mixture Multigroup Structural Equation Modeling to Compare Structural Relations Across Many Groups: An Introduction to the mmgsem R Package](https://doi.org/10.1080/10705511.2026.2617170) (only for cross-sectional data). An accompanying R script for the tutorial can also be found in this complementary [GitHub Repository](https://github.com/AndresFPA/Tutorial-mmgsem).
 
 ## (Main) Functions
 + `mmgsem()`: The main function performs the clustering based on the structural parameters.
