@@ -24,20 +24,29 @@ ModelSelection(
   meanstr = FALSE,
   rescaling = F,
   only_slow = FALSE,
+  time = NULL,
+  s2_fast = TRUE,
+  mi_method = c("group_violations", "test_statistic"),
+  mi_alpha = 0.05,
+  mi_d_cfi_threshold = 0.01,
+  mi_max_iter = 20L,
+  mi_fit_indices = c("chisq", "df", "pvalue", "cfi", "rmsea", "srmr"),
+  mi_specific_noninv = FALSE,
   ...
 )
 }
 \arguments{
 \item{dat}{Data frame containing observed variables and a grouping variable..}
 
-\item{S1}{Step 1 (measurement model) specification using lavaan syntax. Can be a list of strings determing the number of measurement blocks (e.g., one string for the MM of factor 1, and a second string for the MM of factor 2).
-If s1_type = "mplus", S1 must be written in mplus syntax.}
+\item{S1}{Step 1 (measurement model) specification. Can be omitted when \code{s1_fit} is supplied. In cross-sectional mode it may be lavaan syntax, or a list of strings for multiple measurement blocks.}
 
 \item{S2}{Step 2 (structural model) specification using lavaan syntax.}
 
 \item{s1_type}{String. Determines which model is used when estimating step 1. Can be "lavaan" (CFA), "blavaan" (BCFA), or "mplus" (ML-CFA).}
 
-\item{group}{Name of the grouping variable (as a character string).}
+\item{group}{Name of the grouping variable in \code{dat}.}
+
+\item{time}{Optional name of a time variable. When supplied, fit longitudinal models with \code{lmmgsem()}.}
 
 \item{nclus}{Integer vector of length two. Determines the range of cluster solutions to estimate. It must contain the lower and upper boundaries of the models the user wants to estimate. For instance, nclus = c(1, 6) estimates models from 1 to 6 clusters.}
 
@@ -55,7 +64,7 @@ Example for 6 groups and 2 clusters:
                         [6,]    0    1
 }\if{html}{\out{</div>}}}
 
-\item{s1_fit}{Optional. A fitted model object for Step 1. Can be from lavaan (CFA), blavaan (BCFA), or MplusAutomation (ML-CFA).}
+\item{s1_fit}{Optional fitted Step 1 model. In longitudinal mode, this must be a lavaan multigroup fit with one group per group-time cell. In cross-sectional mode it may also be a blavaan or MplusAutomation fit. When omitted, \code{ModelSelection()} computes and reuses the fit.}
 
 \item{max_it}{Maximum number of iterations for Step 2 (default = 10000).}
 
@@ -80,16 +89,30 @@ before running step 2. It is set to T by default (rescaling happens). If set to 
 
 \item{only_slow}{Logical. If TRUE, uses the slower Step 2 estimation implementation.}
 
-\item{...}{MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
-and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables,
-group.equal for constraints, group.partial for non-invariances, etc.}
+\item{s2_fast}{If \code{time} is supplied, use the fast longitudinal Step 2 estimator when TRUE and the slow estimator when FALSE.}
+
+\item{mi_method}{Score-test selection rule: \code{"group_violations"} or \code{"test_statistic"}; used when \code{time} is supplied.}
+
+\item{mi_alpha}{Significance level for longitudinal score tests.}
+
+\item{mi_d_cfi_threshold}{Maximum configural-to-metric CFI difference in the longitudinal invariance analysis.}
+
+\item{mi_max_iter}{Maximum iterations per slice in the longitudinal invariance analysis.}
+
+\item{mi_fit_indices}{Fit indices returned by the longitudinal invariance analysis.}
+
+\item{mi_specific_noninv}{If \code{TRUE}, allow non-invariance for specific group-time pairs.}
+
+\item{...}{For cross-sectional MMGSEM, lavaan arguments passed to the first-step CFA. For longitudinal models, additional arguments passed to lavaan's CFA fitting functions.}
 }
 \value{
 Overview: Matrix. It contains the results of all the model selection measures for each model.
 
-Models: List containing the separate mmgsem() results for each of the fitted models.
+Models: List containing the separate \code{mmgsem()} results, or \code{lmmgsem()} results when \code{time} is supplied.
+}
+\details{
+In longitudinal mode, every group must have data at all time points and at least two time points must be present. The longitudinal information criteria use the sequence-level factor likelihood and marginal state entropy. The observed and factor likelihood columns are equal because a separate indicator-level longitudinal likelihood is not calculated. Parameter counts include free measurement parameters, per-state regression parameters, and initial/transition probabilities. Convex-hull scores are unavailable when fewer than three cluster counts are fitted.
 }
 \description{
-A wrapper to perform model selection of MMGSEM. It is used to answer the common clustering question: How many clusters should we use?
-It calls the main function MMGSEM several times. One for each required model. Most of its arguments are the same as the MMGSEM main function.
+A wrapper to select the number of clusters for MMG-SEM. By default it estimates cross-sectional models with \code{mmgsem()}. If \code{time} is supplied, it fits longitudinal models with \code{lmmgsem()} and reuses the measurement invariance fit across candidate cluster counts.
 }

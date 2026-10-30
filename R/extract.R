@@ -1,12 +1,13 @@
-#' Model extraction function for MMGSEM
+#' Extract a model from model selection
 #'
 #' @description
-#' Function used to extract an specific model out of a Model Selection (mmgsem) fitted object.
+#' Extract a model with a specified number of clusters from a model-selection
+#' result created by [ModelSelection()].
 #'
-#' @param object A resulting fitted object from the ModelSelection function.
-#' @param nclus The number of clusters of the desired model
+#' @param object A fitted object returned by [ModelSelection()].
+#' @param nclus Number of clusters in the desired model.
 #'
-#' @return selected_model: the selected model
+#' @return The selected `mmgsem` or `lmmgsem` model.
 #'
 #' @export
 extract <- function(object, nclus){
@@ -14,12 +15,18 @@ extract <- function(object, nclus){
   Models <- object$Models
 
   # Check the number of clusters of each model and extract the desired model
-  for(k in 1:length(Models)){
-    nclus_model <- ncol(Models[[k]]$posteriors) - 1 # Number of clusters
+  for (k in seq_along(Models)) {
+    nclus_model <- if (inherits(Models[[k]], "lmmgsem")) {
+      Models[[k]]$nclus
+    } else {
+      ncol(Models[[k]]$posteriors) - 1
+    }
     if(nclus_model == nclus){
       selected_model <- Models[[k]]
-      class(selected_model) <- "mmgsem"
+      class(selected_model) <- class(Models[[k]])
       return(selected_model)
     }
   }
+  stop("No model with the requested number of clusters was found.",
+       call. = FALSE)
 }

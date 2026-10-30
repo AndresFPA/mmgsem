@@ -179,17 +179,24 @@ summary.mmgsem <- function(object, se = NULL, model_selection = FALSE, logL = "o
     Overview <- model$Overview
     lower_limit <- Overview$Clusters[1]
     upper_limit <- Overview$Clusters[length(Overview$Clusters)]
+    selected_cluster <- function(scores, maximize = FALSE) {
+      idx <- if (maximize) which.max(scores) else which.min(scores)
+      if (length(idx) == 0L || is.na(scores[idx])) {
+        return("not available")
+      }
+      as.character(Overview$Clusters[idx])
+    }
     if (logL == "observed"){
       cat("\nModel Selection Summary for Mixture Multi-Group Structural Equation Modelling (MMGSEM)\n")
       cat("---------------------------------------------------------------------\n")
       cat("MMG-SEM models from", lower_limit, "to", upper_limit, "clusters were run.\n")
       cat("-----------------------------------------\n")
-      cat("Convex Hull selected the model with", which.max(Overview$Chull), "clusters\n")
-      cat("BIC_G selected the model with      ", which.min(Overview$BIC_G), "clusters\n")
-      cat("BIC_N selected the model with      ", which.min(Overview$BIC_N), "clusters\n")
-      cat("AIC selected the model with        ", which.min(Overview$AIC), "clusters\n")
-      cat("AIC3 selected the model with       ", which.min(Overview$AIC3), "clusters\n")
-      cat("ICL selected the model with        ", which.min(Overview$ICL), "clusters\n")
+      cat("Convex Hull selected the model with", selected_cluster(Overview$Chull, TRUE), "clusters\n")
+      cat("BIC_G selected the model with      ", selected_cluster(Overview$BIC_G), "clusters\n")
+      cat("BIC_N selected the model with      ", selected_cluster(Overview$BIC_N), "clusters\n")
+      cat("AIC selected the model with        ", selected_cluster(Overview$AIC), "clusters\n")
+      cat("AIC3 selected the model with       ", selected_cluster(Overview$AIC3), "clusters\n")
+      cat("ICL selected the model with        ", selected_cluster(Overview$ICL), "clusters\n")
       cat("\n")
 
       # Prepare the overview matrix for printing
@@ -205,12 +212,12 @@ summary.mmgsem <- function(object, se = NULL, model_selection = FALSE, logL = "o
       cat("---------------------------------------------------------------------\n")
       cat("MMG-SEM models from", lower_limit, "to", upper_limit, "clusters were run.\n")
       cat("-----------------------------------------\n")
-      cat("Convex Hull selected the model with", which.max(Overview$Chull_fac), "clusters\n")
-      cat("BIC_G selected the model with      ", which.min(Overview$BIC_G_fac), "clusters\n")
-      cat("BIC_N selected the model with      ", which.min(Overview$BIC_N_fac), "clusters\n")
-      cat("AIC selected the model with        ", which.min(Overview$AIC_fac), "clusters\n")
-      cat("AIC3 selected the model with       ", which.min(Overview$AIC3_fac), "clusters\n")
-      cat("ICL selected the model with        ", which.min(Overview$ICL_fac), "clusters\n")
+      cat("Convex Hull selected the model with", selected_cluster(Overview$Chull_fac, TRUE), "clusters\n")
+      cat("BIC_G selected the model with      ", selected_cluster(Overview$BIC_G_fac), "clusters\n")
+      cat("BIC_N selected the model with      ", selected_cluster(Overview$BIC_N_fac), "clusters\n")
+      cat("AIC selected the model with        ", selected_cluster(Overview$AIC_fac), "clusters\n")
+      cat("AIC3 selected the model with       ", selected_cluster(Overview$AIC3_fac), "clusters\n")
+      cat("ICL selected the model with        ", selected_cluster(Overview$ICL_fac), "clusters\n")
       cat("\n")
 
       # Prepare the overview matrix for printing

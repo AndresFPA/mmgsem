@@ -70,7 +70,7 @@ summary(mmgsem_fit)
 print(mmgsem_fit$posteriors)
 ```
 
-To compare models with different numbers of clusters, use `ModelSelection()`. This fits each multiple models following the `nclus` argument (min, max). Its computation can take considerably longer than fitting a single model.
+To compare models with different numbers of clusters, use `ModelSelection()`. This fits each cluster count in the range specified by `nclus`. Its computation can take considerably longer than fitting a single model.
 
 ```R
 modelSelection_fit <- mmgsem::ModelSelection(
@@ -84,7 +84,7 @@ modelSelection_fit <- mmgsem::ModelSelection(
   s1_fit  = MM_fit    # Optional fitted Step 1 lavaan model
 )
 
-summary(model = modelSelection_fit, model_selection = TRUE)
+summary(modelSelection_fit, model_selection = TRUE)
 selected_fit <- mmgsem::extract(object = modelSelection_fit, nclus = 4)
 ```
 
@@ -93,8 +93,56 @@ Computing standard errors uses numerical differentiation and can take a long tim
 ```R
 # standard_errors <- mmgsem::standard_errors ## load the pre-computed standard errors for this example
 standard_errors <- mmgsem::compute_se(object = selected_fit) # Fitted model for standard-error computation
-summary(model = selected_fit, se = standard_errors)
+summary(selected_fit, se = standard_errors)
 ```
+
+## Longitudinal extension
+
+For repeated measurements of the same groups, `lmmgsem()` combines stepwise measurement-invariance analysis with a hidden Markov model. Provide a data frame with group and time identifiers, plus measurement (`S1`) and structural (`S2`) model syntax. Every group must have data at each of at least two time points.
+
+```R
+mi_results <- mmgsem::compute_mi_long_stepwise_score(
+  data = longitudinal_data,
+  model = S1_model,
+  group_var = "group",
+  time_var = "time",
+  method = "test_statistic",
+  specific_noninv = FALSE
+)
+s1_fit <- mi_results$final_fit
+
+lmmgsem_fit <- mmgsem::lmmgsem(
+  dat = longitudinal_data,
+  S1 = S1_model,
+  S2 = S2_model,
+  group = "group",
+  time = "time",
+  nclus = 4,
+  seed = 1,
+  s1_fit = s1_fit
+)
+
+summary(lmmgsem_fit)
+```
+
+You can pass a lavaan model directly through `s1_fit`; it must be a multigroup measurement model with one group per group-time cell. If `s1_fit` is omitted, the measurement-invariance fit is computed automatically. For cluster-count selection, `ModelSelection()` accepts the same longitudinal arguments and reuses the lavaan measurement model across candidate models:
+
+```R
+longitudinal_selection <- mmgsem::ModelSelection(
+  dat = longitudinal_data,
+  S1 = S1_model,
+  S2 = S2_model,
+  group = "group",
+  time = "time",
+  nclus = c(1, 6),
+  seed = 1
+)
+
+summary(longitudinal_selection, model_selection = TRUE)
+selected_longitudinal_fit <- mmgsem::extract(longitudinal_selection, nclus = 4)
+```
+
+The HMM returns posterior state probabilities for each group and time point, initial state probabilities, and the state-transition matrix. Its information criteria use the sequence-level factor likelihood and marginal state entropy; the observed and factor likelihood fields are equal because no separate indicator-level likelihood is calculated. Standard errors for `lmmgsem()` are not currently implemented.
 
 ## Tutorial
 
@@ -102,7 +150,9 @@ An in-depth tutorial on how to use this package has been published in _Structura
 
 ## (Main) Functions
 + `mmgsem()`: The main function performs the clustering based on the structural parameters.
++ `lmmgsem()`: Longitudinal extension that estimates group state transitions over time.
 + `ModelSelection()`: Wrapper function. It runs MMG-SEM multiple times with different numbers of clusters and returns model selection measures.
++ `compute_mi_long_stepwise_score()`: Stepwise measurement-invariance analysis for longitudinal data.
 + `compute_se()`: Wrapper function. It computes the standard errors of the resulting MMG-SEM parameters.
 
 ### MMG-SEM

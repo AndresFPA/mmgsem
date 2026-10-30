@@ -1,62 +1,66 @@
-CHull <- function(loglik, nrpar, nsclust){
-  # browser()
-  Clus <- seq(nsclust[1], nsclust[2])
-  fitMat <- matrix(data = c(Clus, loglik, nrpar), ncol = 3)
-  k <- nrow(fitMat)
-  
-  screeratios <- matrix(NA, nsclust[2] - nsclust[1] + 1, 1)
-  CHullcheck <- 0
-  for(nclust in (nsclust[1] + 1):(nsclust[2] - 1)){
-    LL_nclust <- fitMat[nclust-nsclust[1]+1, 2]
-    npar_nclust <- fitMat[nclust-nsclust[1]+1, 3]
-    LL_nclustmin1 <- fitMat[nclust-nsclust[1], 2]
-    npar_nclustmin1 <- fitMat[nclust-nsclust[1], 3]
-    LL_nclustplus1 <- fitMat[nclust-nsclust[1]+2, 2]
-    npar_nclustplus1 <- fitMat[nclust-nsclust[1]+2, 3]
-    # determine whether intermediate point is part of the convex hull
-    slope <- (LL_nclustplus1-LL_nclustmin1)/(npar_nclustplus1-npar_nclustmin1)
-    point_line <- LL_nclustmin1+slope*(npar_nclust-npar_nclustmin1)
-    #diff_fit=(LL_nclust-LL_nclustmin1)/abs(LL_nclust)
-    if(isTRUE(LL_nclust>=(point_line-.01))){ # && diff_fit>.0001)
-      screeratios[nclust - nsclust[1] + 1] <- ((LL_nclust-LL_nclustmin1)/(npar_nclust-npar_nclustmin1))/((LL_nclustplus1-LL_nclust)/(npar_nclustplus1-npar_nclust))
+CHull <- function(loglik, nrpar, nsclust) {
+  clusters <- seq.int(nsclust[1], nsclust[2])
+  fit_mat <- cbind(clusters, loglik, nrpar)
+  nrows <- nrow(fit_mat)
+  scores <- rep(NA_real_, nrows)
+  if (nrows < 3L) {
+    return(cbind(fit_mat, scores))
+  }
+
+  calculate_score <- function(left, middle, right) {
+    ll_left <- fit_mat[left, 2]
+    ll_middle <- fit_mat[middle, 2]
+    ll_right <- fit_mat[right, 2]
+    par_left <- fit_mat[left, 3]
+    par_middle <- fit_mat[middle, 3]
+    par_right <- fit_mat[right, 3]
+    par_span <- par_right - par_left
+    left_span <- par_middle - par_left
+    right_span <- par_right - par_middle
+    right_gain <- ll_right - ll_middle
+
+    if (any(!is.finite(c(ll_left, ll_middle, ll_right,
+                         par_left, par_middle, par_right))) ||
+        par_span == 0 || left_span == 0 || right_span == 0 ||
+        right_gain == 0) {
+      return(NA_real_)
     }
+
+    point_line <- ll_left +
+      ((ll_right - ll_left) / par_span) * left_span
+    if (ll_middle < point_line - 0.01) {
+      return(NA_real_)
+    }
+    score <- ((ll_middle - ll_left) / left_span) /
+      (right_gain / right_span)
+    if (is.finite(score)) score else NA_real_
   }
-  #screeratios[CHullcheck<0]=NA
-  convexhull <- which(!is.na(screeratios))
-  nrows <- nrow(fitMat)
-  convexhull <- c(fitMat[1,1],convexhull,fitMat[nrows,1])
-  nrhull <- length(convexhull)
-  change <- 0
-  if(nrhull < nrows){
-    change <- 1
+
+  for (middle in 2:(nrows - 1L)) {
+    scores[middle] <- calculate_score(middle - 1L, middle, middle + 1L)
   }
-  while(nrhull > 2 && change == 1){ # check again whether intermediate points are on the convex hull
-    nsclusthull <- fitMat[convexhull, 1]
-    change <- 0
-    for(nclust in 2:(nrhull - 1)){
-      if(!identical(convexhull[(nclust-1):(nclust+1)],c(convexhull[nclust]-1,convexhull[nclust],convexhull[nclust]+1))){
-        LL_nclust <- fitMat[convexhull[nclust]-nsclust[1]+1,2]
-        npar_nclust <- fitMat[convexhull[nclust]-nsclust[1]+1,3]
-        LL_nclustmin1 <- fitMat[convexhull[nclust-1]-nsclust[1]+1,2]
-        npar_nclustmin1 <- fitMat[convexhull[nclust-1]-nsclust[1]+1,3]
-        LL_nclustplus1 <- fitMat[convexhull[nclust+1]-nsclust[1]+1,2]
-        npar_nclustplus1 <- fitMat[convexhull[nclust+1]-nsclust[1]+1,3]
-        # determine whether intermediate point is part of the convex hull
-        slope <- (LL_nclustplus1-LL_nclustmin1)/(npar_nclustplus1-npar_nclustmin1)
-        point_line <- LL_nclustmin1+slope*(npar_nclust-npar_nclustmin1)
-        if(LL_nclust>=(point_line-.01)){
-          # when the subset of three points spans across a point not on the hull, this is the corrected scree ratio (comparing with the previous and next point ON THE HULL)
-          screeratios[convexhull[nclust]-nsclust[1]+1]=((LL_nclust-LL_nclustmin1)/(npar_nclust-npar_nclustmin1))/((LL_nclustplus1-LL_nclust)/(npar_nclustplus1-npar_nclust))
+
+  hull <- c(1L, which(!is.na(scores)), nrows)
+  changed <- length(hull) < nrows
+  while (length(hull) > 2L && changed) {
+    changed <- FALSE
+    for (i in 2:(length(hull) - 1L)) {
+      left <- hull[i - 1L]
+      middle <- hull[i]
+      right <- hull[i + 1L]
+      if (!identical(c(left, middle, right), c(middle - 1L, middle,
+                                               middle + 1L))) {
+        score <- calculate_score(left, middle, right)
+        if (is.na(score)) {
+          scores[middle] <- NA_real_
+          changed <- TRUE
         } else {
-          screeratios[convexhull[nclust]-nsclust[1]+1]=NA
-          change=1
+          scores[middle] <- score
         }
       }
     }
-    convexhull <- which(!is.na(screeratios))
-    convexhull <- c(fitMat[1,1],convexhull,fitMat[nrows,1])
-    nrhull <- length(convexhull)
+    hull <- c(1L, which(!is.na(scores)), nrows)
   }
-  fitMat <- cbind(fitMat, abs(screeratios))
-  return(fitMat)
+
+  cbind(fit_mat, abs(scores))
 }

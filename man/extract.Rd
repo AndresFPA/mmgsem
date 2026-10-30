@@ -2,18 +2,18 @@
 % Please edit documentation in R/extract.R
 \name{extract}
 \alias{extract}
-\title{Model extraction function for MMGSEM}
+\title{Extract a model from model selection}
 \usage{
 extract(object, nclus)
 }
 \arguments{
-\item{object}{A resulting fitted object from the ModelSelection function.}
+\item{object}{A fitted object returned by \code{ModelSelection()}.}
 
-\item{nclus}{The number of clusters of the desired model}
+\item{nclus}{Number of clusters in the desired model.}
 }
 \value{
-selected_model: the selected model
+The selected \code{mmgsem} or \code{lmmgsem} model.
 }
 \description{
-Function used to extract an specific model out of a Model Selection (mmgsem) fitted object.
+Extract a model with a specified number of clusters from a model-selection result created by \code{ModelSelection()}.
 }
