@@ -1,3 +1,5 @@
+![MMG-SEM package banner](man/figures/banner_github.jpg)
+
 [![R-CMD-check](https://github.com/AndresFPA/mmgsem/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/AndresFPA/mmgsem/actions/workflows/R-CMD-check.yaml)
 [![pkgdown](https://github.com/AndresFPA/mmgsem/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/AndresFPA/mmgsem/actions/workflows/pkgdown.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/AndresFPA/mmgsem/blob/main/LICENSE)

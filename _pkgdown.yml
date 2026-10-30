@@ -3,4 +3,4 @@ template:
   bootstrap: 5
   light-switch: true
   theme: github-light
-  theme-dark: github-dark
+  theme-dark: a11y-dark
