@@ -2,14 +2,15 @@
 #'
 #' Summarizes the most important information of the results from a MMG-SEM model
 #'
-#' @param model Resulting object from a mmgsem model (must be a list). It can also be the resulting object from the ModelSelection() function.
+#' @param object Resulting object from a mmgsem model (must be a list). It can also be the resulting object from the ModelSelection() function.
 #' @param se Must be the resulting object from the compute_se() function of the mmgsem package. If included, the summary function will return the hypothesis testing of the relevant parameters (regressions).
 #' @param model_selection Logical. If TRUE, the summary function will return the model selection results of the ModelSelection() function.
 #' @param logL Character. If model_selection = TRUE, the user can choose whether to display the model selection results based on the observed loglikelihood ("observed") or the factors' loglikelihood ("factors"). Default is "observed".
 #' @param ... Not used.
 #' @method summary mmgsem
 #' @export
-summary.mmgsem <- function(model, se = NULL, model_selection = FALSE, logL = "observed", ...) {
+summary.mmgsem <- function(object, se = NULL, model_selection = FALSE, logL = "observed", ...) {
+  model <- object
   if (!is.list(model)) {
     stop("Input must be a list, likely the output of MMGSEM() or ModelSelection().")
   }

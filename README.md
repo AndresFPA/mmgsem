@@ -84,7 +84,7 @@ modelSelection_fit <- mmgsem::ModelSelection(
   s1_fit  = MM_fit    # Optional fitted Step 1 lavaan model
 )
 
-summary(model = modelSelection_fit, model_selection = TRUE)
+summary(modelSelection_fit, model_selection = TRUE)
 selected_fit <- mmgsem::extract(object = modelSelection_fit, nclus = 4)
 ```
 
@@ -93,7 +93,7 @@ Computing standard errors uses numerical differentiation and can take a long tim
 ```R
 # standard_errors <- mmgsem::standard_errors ## load the pre-computed standard errors for this example
 standard_errors <- mmgsem::compute_se(object = selected_fit) # Fitted model for standard-error computation
-summary(model = selected_fit, se = standard_errors)
+summary(selected_fit, se = standard_errors)
 ```
 
 ## Longitudinal extension
@@ -144,7 +144,7 @@ longitudinal_selection <- mmgsem::ModelSelection(
   seed = 1
 )
 
-summary(model = longitudinal_selection, model_selection = TRUE)
+summary(longitudinal_selection, model_selection = TRUE)
 selected_longitudinal_fit <- mmgsem::extract(longitudinal_selection, nclus = 4)
 ```
 

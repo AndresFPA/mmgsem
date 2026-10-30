@@ -7,7 +7,7 @@ Authors@R:
 Description: Package for finding clusters of groups that share similar relations
     between latent variables (i.e., regression parameters) through MMG-SEM,
     with an extension for longitudinal group-state transitions.
-License: MIT + file LICENSE
+License: MIT
 URL: https://andresfpa.github.io/mmgsem/, https://github.com/AndresFPA/mmgsem
 BugReports: https://github.com/AndresFPA/mmgsem/issues
 Imports:
