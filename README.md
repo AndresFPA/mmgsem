@@ -98,9 +98,9 @@ summary(selected_fit, se = standard_errors)
 
 ## Longitudinal extension
 
-For multi-wave data of the same groups, `lmmgsem()` extends MMG-SEM with a Latent Markov model in the second step of the estimation (*Note: Every group must have data at each of at least two time points*). We provide an experimental function to test and identify for measurement invariance across groups and time points. However, the function is still in development and its results must interpreted with caution. 
+For multi-wave data of the same groups, `lmmgsem()` extends MMG-SEM with a Latent Markov model in the second step of the estimation (*Note: Every group must have data for all time points*). We provide an experimental function to test for measurement invariance and identify non-invariant parameters across groups and time points. However, the function is still in development and its results must be interpreted with caution. 
 
-By providing a data frame with group and time variables, plus measurement (`S1`) and structural (`S2`) model syntax, the measuement model can be estimated as: 
+By providing a data frame with group and time variables, plus measurement (`S1`) and structural (`S2`) model syntax, the measurement model can be estimated as: 
 
 ```R
 mi_results <- mmgsem::compute_mi_long_stepwise_score(
@@ -114,7 +114,7 @@ mi_results <- mmgsem::compute_mi_long_stepwise_score(
 s1_fit <- mi_results$final_fit
 ```
 
-Which will return a lavaan object for a MG-CFA where every group-time combination is treated as an independent group. The user can, of course, run their own analysis using lavaan. You can pass a lavaan model directly through `s1_fit`; it must be a multigroup measurement model. If `s1_fit` is omitted, the measurement-invariance fit is computed automatically:
+This will return a lavaan object for an MG-CFA where every group-time combination is treated as an independent group. The user can, of course, run their own analysis using lavaan. You can pass a lavaan model directly through `s1_fit`; it must be a multigroup measurement model. If `s1_fit` is omitted, the measurement-invariance fit is computed automatically:
 
 ```R
 lmmgsem_fit <- mmgsem::lmmgsem(
