@@ -17,21 +17,20 @@ pak::pak("AndresFPA/mmgsem")
 
 ## Quick start
 
-This example uses the package's example data to estimate a four-cluster model. The measurement model is estimated using `lavaan`; the structural model is then clustered by `mmgsem()`.
+This example uses the package's example data to estimate a four-cluster model:
 
 ```R
 data <- mmgsem::data_example
+```
 
+The measurement model is estimated using `lavaan`:
+
+```R
 S1_model <- '
     F1 =~ V1 + V2 + V3 + V4 + V5
     F2 =~ V6 + V7 + V8 + V9 + V10
     F3 =~ V11 + V12 + V13 + V14 + V15
     F4 =~ V16 + V17 + V18 + V19 + V20
-'
-
-S2_model <- '
-    F4 ~ F1 + F3
-    F3 ~ F1 + F2
 '
 
 MM_fit <- lavaan::cfa(
@@ -44,6 +43,15 @@ MM_fit <- lavaan::cfa(
                     "F3 =~ V12",
                     "F4 =~ V17")
 )
+```
+
+The structural model is then clustered by `mmgsem()`.
+
+```R
+S2_model <- '
+    F4 ~ F1 + F3
+    F3 ~ F1 + F2
+'
 
 mmgsem_fit <- mmgsem::mmgsem(
   dat     = data,     # Data
