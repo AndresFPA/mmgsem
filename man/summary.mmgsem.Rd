@@ -4,10 +4,10 @@
 \alias{summary.mmgsem}
 \title{Summary function for mmgsem}
 \usage{
-\method{summary}{mmgsem}(object, se = NULL, model_selection = FALSE, logL = "observed", ...)
+\method{summary}{mmgsem}(model, se = NULL, model_selection = FALSE, logL = "observed", ...)
 }
 \arguments{
-\item{object}{Resulting object from a mmgsem model (must be a list). It can also be the resulting object from the ModelSelection() function.}
+\item{model}{Resulting object from a mmgsem model (must be a list). It can also be the resulting object from the ModelSelection() function.}
 
 \item{se}{Must be the resulting object from the compute_se() function of the mmgsem package. If included, the summary function will return the hypothesis testing of the relevant parameters (regressions).}
 
