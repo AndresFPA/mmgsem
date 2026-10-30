@@ -17,10 +17,12 @@ Imports:
 	MASS
 Suggests:
     blavaan,
-    MplusAutomation
+    MplusAutomation,
+    testthat (>= 3.0.0)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Depends: 
     R (>= 3.5)
 LazyData: true
+Config/testthat/edition: 3

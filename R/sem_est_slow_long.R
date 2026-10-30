@@ -177,7 +177,7 @@ sem_est_slow_long <- function(S2, post, cov_eta, nstates, ntimes, ngroups, N_gs)
   for(t in 1:ntimes){
     start_idx <- (((t - 1) * ngroups) + 1)
     end_idx   <- t * ngroups
-    log_liks[[t]] <- loglik_gks[start_idx:end_idx, ]
+    log_liks[[t]] <- loglik_gks[start_idx:end_idx, , drop = FALSE]
   }
 
   estimates <- lavaan::lavInspect(s2out, "est", add.class = TRUE,

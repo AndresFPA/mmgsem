@@ -16,12 +16,12 @@ hmm_mmgsem_long <- function(cov_eta, S2, ngroups, nstates, ntimes, N_gs, max_it,
     # Get a random start for the posteriors per time point (marginals)
     post <- array(data = 0, dim = c(ngroups, nstates, ntimes))
     for(t in 1:ntimes){
-      post[, , t] <- matrix(
+      post_t <- matrix(
         data = stats::runif(n = nstates * ngroups),
         ncol = nstates,
         nrow = ngroups
       )
-      post[, , t] <- post[, , t] / rowSums(post[, , t])
+      post[, , t] <- post_t / rowSums(post_t)
     }
 
     # Swap dimensions for easier manipulation later on
@@ -165,4 +165,3 @@ hmm_mmgsem_long <- function(cov_eta, S2, ngroups, nstates, ntimes, N_gs, max_it,
     )
   ))
 }
-
