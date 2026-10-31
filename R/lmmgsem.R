@@ -39,6 +39,7 @@
 #'   and model-selection criteria. Information criteria use the sequence-level
 #'   factor likelihood and marginal posterior state entropy. Standard errors
 #'   are not currently implemented. Parameter counts include free measurement
+#'   parameters, group-time-specific exogenous and endogenous covariance
 #'   parameters, per-state regression parameters, and initial/transition
 #'   probabilities.
 #' @export
@@ -281,8 +282,16 @@ lmmgsem <- function(dat, S1 = NULL, S2, group, time, nclus, seed = NULL,
   n_measurement_parameters <- length(unique(
     measurement_parameters[measurement_parameters > 0]
   ))
-  n_parameters <- n_measurement_parameters +
-    as.integer(nclus) * n_regressions + as.integer(nclus)^2 - 1L
+  parameter_counts <- count_lmmgsem_parameters(
+    s2_parameters = s2_parameters,
+    ngroups = ngroups,
+    ntimes = ntimes,
+    nstates = as.integer(nclus),
+    n_regressions = n_regressions,
+    n_measurement_parameters = n_measurement_parameters
+  )
+  n_parameters <- parameter_counts$observed
+  n_parameters_fac <- parameter_counts$structural
   loglik <- as.numeric(hmm_fit$logLik)
   total_n <- sum(N_gs)
   bic_n <- -2 * loglik + n_parameters * log(total_n)
@@ -290,6 +299,11 @@ lmmgsem <- function(dat, S1 = NULL, S2, group, time, nclus, seed = NULL,
   aic <- -2 * loglik + 2 * n_parameters
   aic3 <- -2 * loglik + 3 * n_parameters
   icl <- bic_g + 2 * posterior_entropy
+  bic_n_fac <- -2 * loglik + n_parameters_fac * log(total_n)
+  bic_g_fac <- -2 * loglik + n_parameters_fac * log(ngroups)
+  aic_fac <- -2 * loglik + 2 * n_parameters_fac
+  aic3_fac <- -2 * loglik + 3 * n_parameters_fac
+  icl_fac <- bic_g_fac + 2 * posterior_entropy
 
   output <- list(
     posteriors = post,
@@ -312,14 +326,14 @@ lmmgsem <- function(dat, S1 = NULL, S2, group, time, nclus, seed = NULL,
     model_sel = list(
       BIC = list(
         observed = list(BIC_N = bic_n, BIC_G = bic_g),
-        Factors = list(BIC_N = bic_n, BIC_G = bic_g)
+        Factors = list(BIC_N = bic_n_fac, BIC_G = bic_g_fac)
       ),
-      AIC = list(observed = aic, Factors = aic),
-      AIC3 = list(observed = aic3, Factors = aic3),
-      ICL = list(observed = icl, Factors = icl),
+      AIC = list(observed = aic, Factors = aic_fac),
+      AIC3 = list(observed = aic3, Factors = aic3_fac),
+      ICL = list(observed = icl, Factors = icl_fac),
       R2_entropy = entropy_r2
     ),
-    NrPar = list(Obs.nrpar = n_parameters, Fac.nrpar = n_parameters),
+    NrPar = list(Obs.nrpar = n_parameters, Fac.nrpar = n_parameters_fac),
     N_gs = N_gs,
     ngroups = ngroups,
     ntimes = ntimes,
@@ -332,4 +346,32 @@ lmmgsem <- function(dat, S1 = NULL, S2, group, time, nclus, seed = NULL,
   )
   class(output) <- c("lmmgsem", "mmgsem")
   output
+}
+
+count_lmmgsem_parameters <- function(s2_parameters, ngroups, ntimes, nstates,
+                                     n_regressions,
+                                     n_measurement_parameters) {
+  variables <- lavaan::lavNames(s2_parameters, "ov")
+  regression_rows <- s2_parameters$op == "~"
+  regression_lhs <- unique(s2_parameters$lhs[regression_rows])
+  regression_rhs <- unique(s2_parameters$rhs[regression_rows])
+
+  endog1 <- intersect(variables, intersect(regression_lhs, regression_rhs))
+  endog2 <- setdiff(intersect(variables, regression_lhs), regression_rhs)
+  exog <- setdiff(variables, c(endog1, endog2))
+  n_cells <- ngroups * ntimes
+
+  n_exogenous_covariances <- length(exog) * (length(exog) + 1) / 2 * n_cells
+  n_endog1_variances <- length(endog1) * n_cells
+  n_endog2_covariances <- length(endog2) * (length(endog2) + 1) / 2 * n_cells
+  n_regression_parameters <- n_regressions * nstates
+  n_mixture_parameters <- (nstates - 1) + nstates * (nstates - 1)
+  n_structural_parameters <- n_exogenous_covariances +
+    n_endog1_variances + n_endog2_covariances +
+    n_regression_parameters + n_mixture_parameters
+
+  list(
+    structural = n_structural_parameters,
+    observed = n_measurement_parameters + n_structural_parameters
+  )
 }

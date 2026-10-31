@@ -111,7 +111,7 @@ Overview: Matrix. It contains the results of all the model selection measures fo
 Models: List containing the separate \code{mmgsem()} results, or \code{lmmgsem()} results when \code{time} is supplied.
 }
 \details{
-In longitudinal mode, every group must have data at all time points and at least two time points must be present. The longitudinal information criteria use the sequence-level factor likelihood and marginal state entropy. The observed and factor likelihood columns are equal because a separate indicator-level longitudinal likelihood is not calculated. Parameter counts include free measurement parameters, per-state regression parameters, and initial/transition probabilities. Convex-hull scores are unavailable when fewer than three cluster counts are fitted.
+In longitudinal mode, every group must have data at all time points and at least two time points must be present. The longitudinal information criteria use the sequence-level factor likelihood and marginal state entropy. The observed and factor likelihood columns are equal because a separate indicator-level longitudinal likelihood is not calculated. Parameter counts include free measurement parameters, group-time-specific exogenous and endogenous covariance parameters, per-state regression parameters, and initial/transition probabilities. Convex-hull scores are unavailable when fewer than three cluster counts are fitted.
 }
 \description{
 A wrapper to select the number of clusters for MMG-SEM. By default it estimates cross-sectional models with \code{mmgsem()}. If \code{time} is supplied, it fits longitudinal models with \code{lmmgsem()} and reuses the measurement invariance fit across candidate cluster counts.

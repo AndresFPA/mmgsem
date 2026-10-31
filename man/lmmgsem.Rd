@@ -69,7 +69,7 @@ lmmgsem(
 A \code{lmmgsem} object containing time-specific posterior state probabilities, transition probabilities, model parameters, likelihoods, and model-selection criteria.
 }
 \details{
-Each group must be observed at all time points, and at least two time points must be present. Information criteria use the sequence-level factor likelihood and marginal posterior state entropy. The observed and factor likelihood fields are equal because a separate indicator-level longitudinal likelihood is not calculated. Parameter counts include free measurement parameters, per-state regression parameters, and initial/transition probabilities. Standard errors are not currently implemented.
+Each group must be observed at all time points, and at least two time points must be present. Information criteria use the sequence-level factor likelihood and marginal posterior state entropy. The observed and factor likelihood fields are equal because a separate indicator-level longitudinal likelihood is not calculated. Parameter counts include free measurement parameters, group-time-specific exogenous and endogenous covariance parameters, per-state regression parameters, and initial/transition probabilities. Standard errors are not currently implemented.
 }
 \description{
 Fits a stepwise measurement-invariance model and then an HMM whose latent states represent clusters of groups over time.

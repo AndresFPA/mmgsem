@@ -65,7 +65,8 @@
 #' observed and factor likelihood columns are equal because a separate
 #' indicator-level longitudinal likelihood is not calculated. Convex-hull
 #' scores are unavailable when fewer than three cluster counts are fitted.
-#' Parameter counts include free measurement parameters, per-state regression
+#' Parameter counts include free measurement parameters, group-time-specific
+#' exogenous and endogenous covariance parameters, per-state regression
 #' parameters, and initial/transition probabilities.
 #' @param ... MMGSEM relies on lavaan for the estimation of the first step (i.e., CFA). If needed, the users can pass any lavaan argument to MMGSEM
 #'            and it will be considered when estimating the CFA. For instance, std.lv if users want standardized latent variables,
@@ -150,8 +151,10 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
     }
 
     loglik <- vapply(model_fit, function(x) x$logLik$loglik, numeric(1))
-    nrpar <- vapply(model_fit, function(x) x$NrPar$Fac.nrpar, numeric(1))
+    nrpar <- vapply(model_fit, function(x) x$NrPar$Obs.nrpar, numeric(1))
+    nrpar_fac <- vapply(model_fit, function(x) x$NrPar$Fac.nrpar, numeric(1))
     chull_scores <- rep(NA_real_, length(clusters))
+    chull_scores_fac <- rep(NA_real_, length(clusters))
     if (length(clusters) >= 3L) {
       chull_fit <- CHull(
         loglik = loglik,
@@ -159,6 +162,12 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
         nsclust = c(1L, length(clusters))
       )
       chull_scores <- chull_fit[, 4]
+      chull_fit_fac <- CHull(
+        loglik = loglik,
+        nrpar = nrpar_fac,
+        nsclust = c(1L, length(clusters))
+      )
+      chull_scores_fac <- chull_fit_fac[, 4]
     }
     model_sel <- lapply(model_fit, `[[`, "model_sel")
     overview <- data.frame(
@@ -173,8 +182,8 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
       AIC3 = vapply(model_sel, function(x) x$AIC3$observed, numeric(1)),
       ICL = vapply(model_sel, function(x) x$ICL$observed, numeric(1)),
       LL_fac = loglik,
-      nrpar_fac = nrpar,
-      Chull_fac = chull_scores,
+      nrpar_fac = nrpar_fac,
+      Chull_fac = chull_scores_fac,
       BIC_G_fac = vapply(model_sel, function(x) x$BIC$Factors$BIC_G, numeric(1)),
       BIC_N_fac = vapply(model_sel, function(x) x$BIC$Factors$BIC_N, numeric(1)),
       AIC_fac = vapply(model_sel, function(x) x$AIC$Factors, numeric(1)),
