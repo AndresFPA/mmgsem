@@ -295,12 +295,12 @@ lmmgsem <- function(dat, S1 = NULL, S2, group, time, nclus, seed = NULL,
   loglik <- as.numeric(hmm_fit$logLik)
   total_n <- sum(N_gs)
   bic_n <- -2 * loglik + n_parameters * log(total_n)
-  bic_g <- -2 * loglik + n_parameters * log(ngroups)
+  bic_g <- -2 * loglik + n_parameters * log(ngroups * ntimes)
   aic <- -2 * loglik + 2 * n_parameters
   aic3 <- -2 * loglik + 3 * n_parameters
   icl <- bic_g + 2 * posterior_entropy
   bic_n_fac <- -2 * loglik + n_parameters_fac * log(total_n)
-  bic_g_fac <- -2 * loglik + n_parameters_fac * log(ngroups)
+  bic_g_fac <- -2 * loglik + n_parameters_fac * log(ngroups * ntimes)
   aic_fac <- -2 * loglik + 2 * n_parameters_fac
   aic3_fac <- -2 * loglik + 3 * n_parameters_fac
   icl_fac <- bic_g_fac + 2 * posterior_entropy

@@ -1,0 +1,162 @@
+---
+title: "Quick start"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Quick start}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This guide uses the package's example data to estimate a four-cluster model.
+
+```{r, eval=FALSE}
+data <- mmgsem::data_example
+```
+
+## Fit the measurement model
+
+The measurement model is estimated using `lavaan`:
+
+```{r, eval=FALSE}
+S1_model <- '
+    F1 =~ V1 + V2 + V3 + V4 + V5
+    F2 =~ V6 + V7 + V8 + V9 + V10
+    F3 =~ V11 + V12 + V13 + V14 + V15
+    F4 =~ V16 + V17 + V18 + V19 + V20
+'
+
+MM_fit <- lavaan::cfa(
+  model         = S1_model,
+  data          = data,
+  group         = "group",
+  group.equal   = "loadings",
+  group.partial = c("F1 =~ V2",
+                    "F2 =~ V7",
+                    "F3 =~ V12",
+                    "F4 =~ V17")
+)
+```
+
+## Fit the structural model
+
+The structural model is then clustered by `mmgsem()`:
+
+```{r, eval=FALSE}
+S2_model <- '
+    F4 ~ F1 + F3
+    F3 ~ F1 + F2
+'
+
+mmgsem_fit <- mmgsem::mmgsem(
+  dat     = data,
+  S1      = S1_model,
+  S2      = S2_model,
+  group   = "group",
+  nclus   = 4,
+  seed    = 1,
+  s1_type = "lavaan",
+  s1_fit  = MM_fit
+)
+
+summary(mmgsem_fit)
+print(mmgsem_fit$posteriors)
+```
+
+## Select the number of clusters
+
+`ModelSelection()` fits each cluster count in the range specified by `nclus`.
+Its computation can take considerably longer than fitting a single model.
+
+```{r, eval=FALSE}
+modelSelection_fit <- mmgsem::ModelSelection(
+  dat     = data,
+  S1      = S1_model,
+  S2      = S2_model,
+  group   = "group",
+  nclus   = c(1, 6),
+  seed    = 1,
+  s1_type = "lavaan",
+  s1_fit  = MM_fit
+)
+
+summary(modelSelection_fit, model_selection = TRUE)
+selected_fit <- mmgsem::extract(object = modelSelection_fit, nclus = 4)
+```
+
+## Compute standard errors
+
+Computing standard errors uses numerical differentiation and can take a long
+time, especially for larger models. Run this step when you need standard
+errors; precomputed standard errors for this example data are also available.
+
+```{r, eval=FALSE}
+# standard_errors <- mmgsem::standard_errors
+standard_errors <- mmgsem::compute_se(object = selected_fit)
+summary(selected_fit, se = standard_errors)
+```
+
+## Longitudinal example
+
+For longitudinal data, `lmmgsem()` tracks clusters (latent states) across
+time. Supply a long-format data frame with group and time columns and the same
+observed indicators at each group-time combination. Every group must have
+observations at every time point, with at least two time points. Replace
+`longitudinal_data` below with your data; adapt the measurement and structural
+model syntax if your indicators or model differ.
+
+The measurement and structural models from the cross-sectional example can be
+reused:
+
+```{r, eval=FALSE}
+mi_results <- mmgsem::compute_mi_long_stepwise_score(
+  data = longitudinal_data,
+  model = S1_model,
+  group_var = "group",
+  time_var = "time",
+  method = "test_statistic",
+  specific_noninv = FALSE
+)
+s1_fit <- mi_results$final_fit
+```
+
+This estimates a measurement model in which each group-time combination is
+treated as a separate group. Alternatively, omit `s1_fit` below to have
+`lmmgsem()` estimate the measurement-invariance model automatically.
+
+```{r, eval=FALSE}
+lmmgsem_fit <- mmgsem::lmmgsem(
+  dat = longitudinal_data,
+  S1 = S1_model,
+  S2 = S2_model,
+  group = "group",
+  time = "time",
+  nclus = 4,
+  seed = 1,
+  s1_fit = s1_fit
+)
+
+summary(lmmgsem_fit)
+```
+
+To compare longitudinal models with different numbers of states, include
+`time` in `ModelSelection()`. The range must not exceed the number of groups.
+
+```{r, eval=FALSE}
+longitudinal_selection <- mmgsem::ModelSelection(
+  dat = longitudinal_data,
+  S1 = S1_model,
+  S2 = S2_model,
+  group = "group",
+  time = "time",
+  nclus = c(1, 4),
+  seed = 1
+)
+
+summary(longitudinal_selection, model_selection = TRUE)
+selected_longitudinal_fit <- mmgsem::extract(
+  longitudinal_selection,
+  nclus = 4
+)
+```
+
+Standard errors for `lmmgsem()` are not currently implemented.

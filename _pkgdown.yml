@@ -4,3 +4,11 @@ template:
   light-switch: true
   theme: github-light
   theme-dark: a11y-dark
+navbar:
+  structure:
+    left: [intro, quick-start, reference]
+    right: [search, github]
+  components:
+    quick-start:
+      text: Quick start
+      href: articles/quick-start.html

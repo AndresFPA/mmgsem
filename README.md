@@ -6,7 +6,7 @@
 
 # MMG-SEM: Mixture Multigroup SEM
 
-R code for Mixture Multigroup SEM (MMG-SEM). MMG-SEM performs clustering of a SEM model based on the structural parameters while allowing for a combination of group-specific and invariant parameters in the measurement model. For more information (and citation) about the method, please see: [Mixture Multigroup Structural Equation Modeling: A Novel Method for Comparing Structural Relations Across Many Groups](https://doi.org/10.1037/met0000667)
+R package :package: for Mixture Multigroup SEM (MMG-SEM). MMG-SEM performs clustering of a SEM model based on the structural parameters while allowing for a combination of group-specific and invariant parameters in the measurement model. For more information (and citation) about the method, please see: [Mixture Multigroup Structural Equation Modeling: A Novel Method for Comparing Structural Relations Across Many Groups](https://doi.org/10.1037/met0000667)
 
 ## Installation
 
@@ -19,136 +19,17 @@ pak::pak("AndresFPA/mmgsem")
 
 ## Quick start
 
-This example uses the package's example data to estimate a four-cluster model:
-
-```R
-data <- mmgsem::data_example
-```
-
-The measurement model is estimated using `lavaan`:
-
-```R
-S1_model <- '
-    F1 =~ V1 + V2 + V3 + V4 + V5
-    F2 =~ V6 + V7 + V8 + V9 + V10
-    F3 =~ V11 + V12 + V13 + V14 + V15
-    F4 =~ V16 + V17 + V18 + V19 + V20
-'
-
-MM_fit <- lavaan::cfa(
-  model         = S1_model, # Step 1 model syntax
-  data          = data,     # Data
-  group         = "group",  # Group variable
-  group.equal   = "loadings", # Measurement model constraints (metric invariance)
-  group.partial = c("F1 =~ V2", # Measurement non-invariances
-                    "F2 =~ V7",
-                    "F3 =~ V12",
-                    "F4 =~ V17")
-)
-```
-
-The structural model is then clustered by `mmgsem()`.
-
-```R
-S2_model <- '
-    F4 ~ F1 + F3
-    F3 ~ F1 + F2
-'
-
-mmgsem_fit <- mmgsem::mmgsem(
-  dat     = data,     # Data
-  S1      = S1_model, # Step 1 (measurement) model syntax
-  S2      = S2_model, # Step 2 (structural) model syntax
-  group   = "group",  # Group variable
-  nclus   = 4,        # Number of clusters
-  seed    = 1,        # Seed for reproducible results
-  s1_type = "lavaan", # Step 1 model type
-  s1_fit  = MM_fit    # Optional fitted Step 1 lavaan model
-)
-
-summary(mmgsem_fit)
-print(mmgsem_fit$posteriors)
-```
-
-To compare models with different numbers of clusters, use `ModelSelection()`. This fits each cluster count in the range specified by `nclus`. Its computation can take considerably longer than fitting a single model.
-
-```R
-modelSelection_fit <- mmgsem::ModelSelection(
-  dat     = data,     # Data
-  S1      = S1_model, # Step 1 (measurement) model syntax
-  S2      = S2_model, # Step 2 (structural) model syntax
-  group   = "group",  # Group variable
-  nclus   = c(1, 6),  # Lower and upper cluster counts to fit
-  seed    = 1,        # Seed for reproducible results
-  s1_type = "lavaan", # Step 1 model type
-  s1_fit  = MM_fit    # Optional fitted Step 1 lavaan model
-)
-
-summary(modelSelection_fit, model_selection = TRUE)
-selected_fit <- mmgsem::extract(object = modelSelection_fit, nclus = 4)
-```
-
-Computing standard errors uses numerical differentiation and can take a long time, especially for larger models. Run this step when you need standard errors; the package also includes precomputed standard errors for this example data.
-
-```R
-# standard_errors <- mmgsem::standard_errors ## load the pre-computed standard errors for this example
-standard_errors <- mmgsem::compute_se(object = selected_fit) # Fitted model for standard-error computation
-summary(selected_fit, se = standard_errors)
-```
+The [Quick start guide](https://andresfpa.github.io/mmgsem/articles/quick-start.html)
+walks through fitting a model, selecting the number of clusters, and computing
+standard errors with the example data.
 
 ## Longitudinal extension
 
-For multi-wave data of the same groups, `lmmgsem()` extends MMG-SEM with a Latent Markov model in the second step of the estimation (*Note: Every group must have data for all time points*). We provide an experimental function to test for measurement invariance and identify non-invariant parameters across groups and time points. However, the function is still in development and its results must be interpreted with caution. 
-
-By providing a data frame with group and time variables, plus measurement (`S1`) and structural (`S2`) model syntax, the measurement model can be estimated as: 
-
-```R
-mi_results <- mmgsem::compute_mi_long_stepwise_score(
-  data = longitudinal_data,
-  model = S1_model,
-  group_var = "group",
-  time_var = "time",
-  method = "test_statistic",
-  specific_noninv = FALSE
-)
-s1_fit <- mi_results$final_fit
-```
-
-This will return a lavaan object for an MG-CFA where every group-time combination is treated as an independent group. The user can, of course, run their own analysis using lavaan. You can pass a lavaan model directly through `s1_fit`; it must be a multigroup measurement model. If `s1_fit` is omitted, the measurement-invariance fit is computed automatically:
-
-```R
-lmmgsem_fit <- mmgsem::lmmgsem(
-  dat = longitudinal_data,
-  S1 = S1_model,
-  S2 = S2_model,
-  group = "group",
-  time = "time",
-  nclus = 4,
-  seed = 1,
-  s1_fit = s1_fit
-)
-
-summary(lmmgsem_fit)
-```
-
-For cluster-count selection, `ModelSelection()` accepts the same longitudinal arguments and reuses the lavaan measurement model across candidate models:
-
-```R
-longitudinal_selection <- mmgsem::ModelSelection(
-  dat = longitudinal_data,
-  S1 = S1_model,
-  S2 = S2_model,
-  group = "group",
-  time = "time",
-  nclus = c(1, 6),
-  seed = 1
-)
-
-summary(longitudinal_selection, model_selection = TRUE)
-selected_longitudinal_fit <- mmgsem::extract(longitudinal_selection, nclus = 4)
-```
-
-The Latent Markov Model returns posterior state probabilities for each group and time point, initial state probabilities, and the state-transition matrix. Its information criteria use the factor likelihood; the observed and factor likelihood fields are equal because no separate indicator-level likelihood is calculated. Standard errors for `lmmgsem()` are not currently implemented.
+For multi-wave data, `lmmgsem()` extends MMG-SEM with a Latent Markov model.
+Every group must have data at all time points. The longitudinal extension is
+still in development, so interpret its results with caution. See the
+[Quick start guide](https://andresfpa.github.io/mmgsem/articles/quick-start.html)
+for an example of fitting and selecting longitudinal models.
 
 ## Tutorial
 
