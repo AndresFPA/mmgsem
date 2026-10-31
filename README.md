@@ -6,7 +6,7 @@
 
 # MMG-SEM: Mixture Multigroup SEM
 
-R package :package: for Mixture Multigroup SEM (MMG-SEM). MMG-SEM performs clustering of a SEM model based on the structural parameters while allowing for a combination of group-specific and invariant parameters in the measurement model. For more information (and citation) about the method, please see: [Mixture Multigroup Structural Equation Modeling: A Novel Method for Comparing Structural Relations Across Many Groups](https://doi.org/10.1037/met0000667)
+:package: R package for Mixture Multigroup SEM (MMG-SEM). MMG-SEM performs clustering of a SEM model based on the structural parameters while allowing for a combination of group-specific and invariant parameters in the measurement model. For more information (and citation) about the method, please see: [Mixture Multigroup Structural Equation Modeling: A Novel Method for Comparing Structural Relations Across Many Groups](https://doi.org/10.1037/met0000667)
 
 ## Installation
 
