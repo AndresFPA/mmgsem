@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use mmgsem, please cite it using the metadata below."
+type: software
+title: "mmgsem: Mixture Multigroup Structural Equation Modeling (MMG-SEM)"
+authors:
+  - family-names: "Perez Alonso"
+    given-names: "Andres Felipe"
+    orcid: "https://orcid.org/0000-0002-2480-8771"
+version: 0.0.1
+doi: 10.5281/zenodo.23843635
+url: https://github.com/AndresFPA/mmgsem
