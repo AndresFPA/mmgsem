@@ -123,6 +123,9 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
     }
     clusters <- seq.int(nclus[1], nclus[2])
     model_fit <- vector("list", length(clusters))
+    message("Model selection progress:\n")
+    pb <- utils::txtProgressBar(min = 0, max = length(clusters), style = 3)
+    on.exit(close(pb), add = TRUE)
     for (i in seq_along(clusters)) {
       model_fit[[i]] <- lmmgsem(
         dat = dat,
@@ -145,6 +148,7 @@ ModelSelection <- function(dat, S1 = NULL, S2 = NULL,
         mi_specific_noninv = mi_specific_noninv,
         ...
       )
+      utils::setTxtProgressBar(pb, i)
       if (is.null(s1_fit)) {
         s1_fit <- model_fit[[i]]$MM
       }

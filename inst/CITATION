@@ -1,0 +1,9 @@
+citEntry(
+  entry = "Manual",
+  title = "mmgsem: Mixture Multigroup Structural Equation Modeling (MMG-SEM)",
+  author = person("Andres Felipe", "Perez Alonso"),
+  year = "2026",
+  note = "R package version 0.0.1",
+  doi = "10.5281/zenodo.23843635",
+  url = "https://andresfpa.github.io/mmgsem/"
+)
