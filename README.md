@@ -53,8 +53,6 @@ The `ModelSelection()` wrapper computes several model selection measures. Specif
 The `compute_se()` wrapper function computes standard errors from the Hessian matrix of the parameters. It uses numerical differentiation to compute the second derivative of the log-likelihood with respect to the parameters. Note that it also computes the *corrected* standard errors based on [Bakk et al](https://doi.org/10.1093/pan/mpu003). (2014).
 
 # References
-Perez Alonso, A. F. (n.d.). *mmgsem: Mixture Multigroup Structural Equation Modeling (MMG-SEM)* (Version 0.0.1) [R package]. Zenodo. [DOI](https://doi.org/10.5281/zenodo.23843635)
-
 Bakk, Z., Oberski, D. L., & Vermunt, J. K. (2014). Relating Latent Class Assignments to External Variables: Standard Errors for Correct Inference. *Political Analysis, 22*(4), 520–540. [DOI](https://doi.org/10.1093/pan/mpu003)
 
 Perez Alonso, A. F., Rosseel, Y., Vermunt, J. K., & De Roover, K. (2024). Mixture multigroup structural equation modeling: A novel method for comparing structural relations across many groups. *Psychological Methods*. [DOI](https://doi.org/10.1037/met0000667)
@@ -62,6 +60,8 @@ Perez Alonso, A. F., Rosseel, Y., Vermunt, J. K., & De Roover, K. (2024). Mixtur
 Perez Alonso, A. F., Vermunt, J. K., Rosseel, Y., & Roover, K. D. (2025). Selecting the number of clusters in Mixture Multigroup Structural Equation Modeling. *Methodology, 21*(1), 1–26. [DOI](https://doi.org/10.5964/meth.14931)
 
 Perez Alonso, A. F., Vermunt, J. K., Rosseel, Y., Zhao, H., & De Roover, K. (2026). Using Mixture Multigroup Structural Equation Modeling to Compare Structural Relations Across Many Groups: An Introduction to the mmgsem R Package. *Structural Equation Modeling: A Multidisciplinary Journal*, 1–28. [DOI](https://doi.org/10.1080/10705511.2026.2617170)
+
+Perez Alonso, A. F. (2026). *mmgsem: Mixture Multigroup Structural Equation Modeling (MMG-SEM)* (Version 0.0.1) [R package]. Zenodo. [DOI](https://doi.org/10.5281/zenodo.23843635)
 
 Rosseel, Y., & Loh, W. W. (2022). A structural after measurement approach to structural equation modeling. *Psychological Methods*. [DOI](https://doi.org/10.1037/met0000503)
 
