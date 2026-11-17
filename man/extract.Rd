@@ -7,7 +7,7 @@
 extract(object, nclus)
 }
 \arguments{
-\item{object}{A fitted object returned by \code{ModelSelection()}.}
+\item{object}{A fitted object returned by \code{\link[=ModelSelection]{ModelSelection()}}.}
 
 \item{nclus}{Number of clusters in the desired model.}
 }
@@ -15,5 +15,6 @@ extract(object, nclus)
 The selected \code{mmgsem} or \code{lmmgsem} model.
 }
 \description{
-Extract a model with a specified number of clusters from a model-selection result created by \code{ModelSelection()}.
+Extract a model with a specified number of clusters from a model-selection
+result created by \code{\link[=ModelSelection]{ModelSelection()}}.
 }

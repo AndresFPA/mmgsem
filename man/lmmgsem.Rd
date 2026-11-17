@@ -27,9 +27,11 @@ lmmgsem(
 )
 }
 \arguments{
-\item{dat}{Data frame containing the observed variables, group identifier, and time identifier.}
+\item{dat}{Data frame containing the observed variables, group identifier,
+and time identifier.}
 
-\item{S1}{Measurement model in lavaan syntax. Required when \code{s1_fit} is not supplied.}
+\item{S1}{Measurement model in lavaan syntax. Required when \code{s1_fit} is not
+supplied.}
 
 \item{S2}{Structural model in lavaan syntax.}
 
@@ -47,11 +49,17 @@ lmmgsem(
 
 \item{printing}{If \code{TRUE}, print iteration progress.}
 
-\item{s2_fast}{If \code{TRUE}, use the fast Step 2 estimator; otherwise use the slow estimator.}
+\item{s2_fast}{If \code{TRUE}, use the fast Step 2 estimator; otherwise use the
+slow estimator.}
 
-\item{s1_fit}{Optional lavaan measurement-model fit with one group per group-time cell. Its group labels must match \code{interaction(dat[[group]], dat[[time]], sep = ".Time")}. If omitted, measurement invariance is estimated using \code{compute_mi_long_stepwise_score()}.}
+\item{s1_fit}{Optional lavaan measurement-model fit with one group per
+group-time cell. Its group labels must match
+\code{interaction(dat[[group]], dat[[time]], sep = ".Time")}. If omitted,
+measurement invariance is estimated using
+\code{\link[=compute_mi_long_stepwise_score]{compute_mi_long_stepwise_score()}}.}
 
-\item{mi_method}{Selection rule for freeing a loading: \code{"group_violations"} or \code{"test_statistic"}.}
+\item{mi_method}{Method for selecting invariance violations:
+\code{"group_violations"} or \code{"test_statistic"}.}
 
 \item{mi_alpha}{Significance level for the score tests.}
 
@@ -59,18 +67,26 @@ lmmgsem(
 
 \item{mi_max_iter}{Maximum iterations in each stepwise invariance analysis.}
 
-\item{mi_fit_indices}{Fit indices to return for the invariance models.}
+\item{mi_fit_indices}{Fit indices returned by the invariance analysis.}
 
-\item{mi_specific_noninv}{If \code{TRUE}, allow non-invariance for specific group-time pairs; otherwise free loadings globally.}
+\item{mi_specific_noninv}{If \code{TRUE}, allow non-invariance for specific
+group-time pairs; otherwise free loadings globally.}
 
-\item{...}{Additional arguments passed to lavaan's CFA fitting functions during the measurement-invariance analysis.}
+\item{...}{Additional arguments passed to lavaan's CFA fitting functions
+during the measurement-invariance analysis.}
 }
 \value{
-A \code{lmmgsem} object containing time-specific posterior state probabilities, transition probabilities, model parameters, likelihoods, and model-selection criteria.
-}
-\details{
-Each group must be observed at all time points, and at least two time points must be present. Information criteria use the sequence-level factor likelihood and marginal posterior state entropy. The observed and factor likelihood fields are equal because a separate indicator-level longitudinal likelihood is not calculated. Parameter counts include free measurement parameters, group-time-specific exogenous and endogenous covariance parameters, per-state regression parameters, and initial/transition probabilities. Standard errors are not currently implemented.
+A \code{lmmgsem} object containing time-specific posterior state
+probabilities, transition probabilities, model parameters, likelihoods,
+and model-selection criteria. Information criteria use the sequence-level
+factor likelihood and marginal posterior state entropy. Standard errors
+are not currently implemented. Parameter counts include free measurement
+parameters, group-time-specific exogenous and endogenous covariance
+parameters, per-state regression parameters, and initial/transition
+probabilities.
 }
 \description{
-Fits a stepwise measurement-invariance model and then an HMM whose latent states represent clusters of groups over time.
+Fits a stepwise measurement-invariance model and then an HMM whose latent
+states represent clusters of groups over time. Each group must be observed
+at every time point, with at least two time points.
 }

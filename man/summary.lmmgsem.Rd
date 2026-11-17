@@ -4,11 +4,11 @@
 \alias{summary.lmmgsem}
 \title{Summary for longitudinal MMG-SEM models}
 \usage{
-\method{summary}{lmmgsem}(object, se = NULL, model_selection = FALSE,
-  logL = "observed", ...)
+\method{summary}{lmmgsem}(object, se = NULL, model_selection = FALSE, logL = "observed", ...)
 }
 \arguments{
-\item{object}{A fitted \code{lmmgsem} model or longitudinal model-selection result.}
+\item{object}{A fitted \code{lmmgsem} model or longitudinal model-selection
+result.}
 
 \item{se}{Standard errors are not currently available for \code{lmmgsem} models.}
 
@@ -16,8 +16,8 @@
 
 \item{logL}{Select observed or factor likelihoods for model selection.}
 
-\item{...}{Additional arguments passed to \code{summary.mmgsem()}.}
+\item{...}{Additional arguments passed to \code{\link[=summary.mmgsem]{summary.mmgsem()}}.}
 }
 \description{
-Summarizes transition probabilities, state-specific regression coefficients, and modal states over time. For model-selection objects, displays the model-selection overview.
+Summary for longitudinal MMG-SEM models
 }

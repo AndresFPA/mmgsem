@@ -11,7 +11,7 @@ compute_mi_long_stepwise_score(
   time_var,
   method = c("group_violations", "test_statistic"),
   alpha = 0.05,
-  d_cfi_threshold = 0.010,
+  d_cfi_threshold = 0.01,
   max_iter = 20,
   fit_indices = c("chisq", "df", "pvalue", "cfi", "rmsea", "srmr"),
   specific_noninv = FALSE,
@@ -19,7 +19,8 @@ compute_mi_long_stepwise_score(
 )
 }
 \arguments{
-\item{data}{Data frame containing the observed variables and grouping and time identifiers.}
+\item{data}{Data frame containing the observed variables and grouping and
+time identifiers.}
 
 \item{model}{Measurement model in lavaan syntax.}
 
@@ -27,7 +28,8 @@ compute_mi_long_stepwise_score(
 
 \item{time_var}{Name of the time column in \code{data}.}
 
-\item{method}{Selection rule for freeing a loading: \code{"group_violations"} or \code{"test_statistic"}.}
+\item{method}{Selection rule for freeing a loading:
+\code{"group_violations"} or \code{"test_statistic"}.}
 
 \item{alpha}{Significance level for the score tests.}
 
@@ -35,19 +37,26 @@ compute_mi_long_stepwise_score(
 
 \item{max_iter}{Maximum number of iterations per group/time slice.}
 
-\item{fit_indices}{Fit indices to return for the configural and metric models.}
+\item{fit_indices}{Fit indices to return for the configural and metric
+models.}
 
-\item{specific_noninv}{If \code{TRUE}, allow non-invariance for specific group-time pairs; otherwise free loadings globally.}
+\item{specific_noninv}{If \code{TRUE}, allow non-invariance for specific
+group-time pairs; otherwise free loadings globally.}
 
 \item{...}{Additional arguments passed to lavaan's CFA fitting functions.}
 }
 \value{
-A list containing the final lavaan measurement model, latent covariance matrices for each group-time cell, invariance results, and fit indices.
+A list containing the final lavaan measurement model, latent
+covariance matrices for each group-time cell, invariance results, and fit
+indices.
+}
+\description{
+Identifies loading non-invariance across groups within each time point and
+across time points within each group, then fits a final measurement model
+across all group-time cells. This score-based implementation is the
+measurement-invariance procedure used by \code{\link[=lmmgsem]{lmmgsem()}}.
 }
 \details{
 Every group must have observations at each of at least two time points.
 Missing group or time identifiers are rejected rather than silently dropped.
-}
-\description{
-Identifies loading non-invariance across groups within each time point and across time points within each group, then fits a final measurement model across all group-time cells. This score-based implementation is the measurement-invariance procedure used by \code{lmmgsem()}.
 }
