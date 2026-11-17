@@ -24,6 +24,19 @@
 #' }
 "standard_errors"
 
+#' Deprecated standard errors (4K model)
+#'
+#' Deprecated object containing the standard errors of the 4-cluster model from the example data of the tutorial.
+#' Due to a change in the compute_se() function, the default results do not match this object anymore.
+#'
+#' @format ##
+#' List
+#' \describe{
+#'   \item{SE_vector}{List of vectors containing the standard errors per type of parameter.}
+#'   \item{HESS}{Hessian matrix (second derivative) of the loglikelihood function with respect of all parameters.}
+#'   \item{vcov_betas}{Variance-covariance matrix of the beta parameters. Used for hypothesis testing.}
+#' }
+"standard_errors_deprecated"
 
 #' Standard errors (5K model)
 #'
