@@ -24,17 +24,12 @@ The [Quick start guide](https://andresfpa.github.io/mmgsem/articles/quick-start.
 walks through fitting a model, selecting the number of clusters, and computing
 standard errors with the example data.
 
-## Longitudinal extension
-
-For multi-wave data, `lmmgsem()` extends MMG-SEM with a Latent Markov model.
-Every group must have data at all time points. The longitudinal extension is
-still in development, so interpret its results with caution. See the
-[Quick start guide](https://andresfpa.github.io/mmgsem/articles/quick-start.html)
-for an example of fitting and selecting longitudinal models.
-
 ## Tutorial
 
-An in-depth tutorial on how to use this package has been published in _Structural Equation Modeling: A Multidisciplinary Journal_, please see: [Using Mixture Multigroup Structural Equation Modeling to Compare Structural Relations Across Many Groups: An Introduction to the mmgsem R Package](https://doi.org/10.1080/10705511.2026.2617170) (only for cross-sectional data). An accompanying R script for the tutorial can also be found in this complementary [GitHub Repository](https://github.com/AndresFPA/Tutorial-mmgsem).
+An in-depth tutorial on how to use this package has been published in _Structural Equation Modeling: A Multidisciplinary Journal_; please see: [Using Mixture Multigroup Structural Equation Modeling to Compare Structural Relations Across Many Groups: An Introduction to the mmgsem R Package](https://doi.org/10.1080/10705511.2026.2617170) (only for cross-sectional data). An accompanying R script for the tutorial is also available in this complementary [GitHub Repository](https://github.com/AndresFPA/Tutorial-mmgsem).
+
+## Graphical User Interface (GUI)
+A point-and-click GUI for `mmgsem` was developed by [cahitgs](https://github.com/cahitgs) and is openly available at [this repository](https://github.com/cahitgs/mmgsemGUI). It can be downloaded as a standalone Windows app (running R in the background) or run directly in R. A quick start (i.e., installation and use) is available in the original repository, including the data example used in `mmgsem`'s tutorial paper. 
 
 ## (Main) Functions
 + `mmgsem()`: The main function performs the clustering based on the structural parameters.
@@ -51,6 +46,14 @@ The `ModelSelection()` wrapper computes several model selection measures. Specif
 
 ### Standard Errors
 The `compute_se()` wrapper function computes standard errors from the Hessian matrix of the parameters. It uses numerical differentiation to compute the second derivative of the log-likelihood with respect to the parameters. Note that it also computes the *corrected* standard errors based on [Bakk et al](https://doi.org/10.1093/pan/mpu003). (2014).
+
+## Longitudinal extension
+
+For multi-wave data, `lmmgsem()` extends MMG-SEM with a Latent Markov model.
+Every group must have data at all time points. The longitudinal extension is
+still in development, so interpret its results with caution. See the
+[Quick start guide](https://andresfpa.github.io/mmgsem/articles/quick-start.html)
+for an example of fitting and selecting longitudinal models.
 
 # References
 Bakk, Z., Oberski, D. L., & Vermunt, J. K. (2014). Relating Latent Class Assignments to External Variables: Standard Errors for Correct Inference. *Political Analysis, 22*(4), 520–540. [DOI](https://doi.org/10.1093/pan/mpu003)
